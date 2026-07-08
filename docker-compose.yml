@@ -1,0 +1,63 @@
+version: "3.9"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: hotel_reservas
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/schemas:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  auth-service:
+    build: ./services/auth-service
+    env_file: ./services/auth-service/.env
+    ports: ["3001:3001"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  catalog-service:
+    build: ./services/catalog-service
+    env_file: ./services/catalog-service/.env
+    ports: ["3002:3002"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  reservation-service:
+    build: ./services/reservation-service
+    env_file: ./services/reservation-service/.env
+    ports: ["3003:3003"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  payment-service:
+    build: ./services/payment-service
+    env_file: ./services/payment-service/.env
+    ports: ["3004:3004"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  review-service:
+    build: ./services/review-service
+    env_file: ./services/review-service/.env
+    ports: ["3005:3005"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  pgdata:
