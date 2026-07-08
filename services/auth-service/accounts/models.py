@@ -3,28 +3,25 @@ from django.db import models
 
 
 class User(models.Model):
-    ROLE_CHOICES = [('CUSTOMER', 'Customer'), ('ADMIN', 'Admin'), ('STAFF', 'Staff')]
-    STATUS_CHOICES = [('ACTIVE', 'Active'), ('SUSPENDED', 'Suspended'), ('DELETED', 'Deleted')]
+    ROLE_CHOICES = [
+        ('cliente', 'Cliente'),
+        ('admin', 'Admin'),
+    ]
+    STATUS_CHOICES = [
+        ('activo', 'Activo'),
+        ('suspendido', 'Suspendido'),
+        ('inactivo', 'Inactivo'),
+    ]
 
-    id              = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    email           = models.EmailField(unique=True)
-    password_hash   = models.CharField(max_length=255)
-    role            = models.CharField(max_length=20, choices=ROLE_CHOICES, default='CUSTOMER')
-    account_status  = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ACTIVE')
-    created_at      = models.DateTimeField(auto_now_add=True)
-
-    class Meta:
-        db_table = 'users'
-
-
-class Customer(models.Model):
-    """Relacion 'es': 1 user <-> 1 perfil de customer (opcional, staff no tiene fila aqui)."""
-    id                  = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
-    user                = models.OneToOneField(User, on_delete=models.CASCADE, related_name='customer')
-    full_name           = models.CharField(max_length=150)
-    phone               = models.CharField(max_length=20, blank=True)
-    preferred_language  = models.CharField(max_length=10, blank=True)
-    loyalty_points      = models.IntegerField(default=0)
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    email = models.EmailField(unique=True, db_column='correo')
+    password_hash = models.CharField(max_length=255, db_column='contrasena_hash')
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='cliente', db_column='rol')
+    account_status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='activo', db_column='estado_cuenta')
+    created_at = models.DateTimeField(auto_now_add=True, db_column='creado_en')
 
     class Meta:
-        db_table = 'customers'
+        db_table = 'usuarios'
+
+    def __str__(self):
+        return self.email
