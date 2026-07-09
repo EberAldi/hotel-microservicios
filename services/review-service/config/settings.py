@@ -26,10 +26,10 @@ ROOT_URLCONF = 'config.urls'
 WSGI_APPLICATION = 'config.wsgi.application'
 
 # Este servicio migra SOLO sus propias apps (ver INSTALLED_APPS arriba).
-# Se conecta con su propio rol de Postgres (svc_review), que solo tiene permisos
-# sobre el schema 'review_svc' -- aunque la BD fisica sea la misma para los 5
-# servicios, cada quien corre "python manage.py migrate" de forma
-# independiente y solo puede crear/alterar tablas dentro de su propio schema.
+# Se conecta a SU PROPIA base de datos (review_db) con SU PROPIO rol (svc_review),
+# dueño exclusivo de esa base -- database-per-service real, no schemas
+# compartidos. Cada servicio corre "python manage.py migrate" de forma
+# totalmente independiente sobre su propia base de datos.
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -38,16 +38,12 @@ DATABASES = {
         'PASSWORD': os.getenv('DB_PASSWORD'),
         'HOST': os.getenv('DB_HOST'),
         'PORT': os.getenv('DB_PORT'),
-        'OPTIONS': {
-            'options': f"-c search_path={os.getenv('DB_SCHEMA')}"
-        },
     }
 }
 
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ),
+    # Sin JWT todavia: se agrega 'rest_framework_simplejwt.authentication.JWTAuthentication'
+    # aqui cuando implementemos login/registro con tokens.
 }
 
 SIMPLE_JWT = {

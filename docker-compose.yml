@@ -1,11 +1,8 @@
-version: "3.9"
-
 services:
   postgres:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_DB: hotel_reservas
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
     ports:
@@ -21,43 +18,68 @@ services:
 
   auth-service:
     build: ./services/auth-service
-    env_file: ./services/auth-service/.env
-    ports: ["3001:3001"]
+    restart: unless-stopped
+    env_file:
+      - ./services/auth-service/.env
+    ports:
+      - "3001:3001"
     depends_on:
       postgres:
         condition: service_healthy
+    command: >
+      sh -c "python manage.py makemigrations && python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:3001"
 
   catalog-service:
     build: ./services/catalog-service
-    env_file: ./services/catalog-service/.env
-    ports: ["3002:3002"]
+    restart: unless-stopped
+    env_file:
+      - ./services/catalog-service/.env
+    ports:
+      - "3002:3002"
     depends_on:
       postgres:
         condition: service_healthy
+    command: >
+      sh -c "python manage.py makemigrations && python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:3002"
 
   reservation-service:
     build: ./services/reservation-service
-    env_file: ./services/reservation-service/.env
-    ports: ["3003:3003"]
+    restart: unless-stopped
+    env_file:
+      - ./services/reservation-service/.env
+    ports:
+      - "3003:3003"
     depends_on:
       postgres:
         condition: service_healthy
+    command: >
+      sh -c "python manage.py makemigrations && python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:3003"
 
   payment-service:
     build: ./services/payment-service
-    env_file: ./services/payment-service/.env
-    ports: ["3004:3004"]
+    restart: unless-stopped
+    env_file:
+      - ./services/payment-service/.env
+    ports:
+      - "3004:3004"
     depends_on:
       postgres:
         condition: service_healthy
+    command: >
+      sh -c "python manage.py makemigrations && python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:3004"
 
   review-service:
     build: ./services/review-service
-    env_file: ./services/review-service/.env
-    ports: ["3005:3005"]
+    restart: unless-stopped
+    env_file:
+      - ./services/review-service/.env
+    ports:
+      - "3005:3005"
     depends_on:
       postgres:
         condition: service_healthy
+    command: >
+      sh -c "python manage.py makemigrations && python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:3005"
 
 volumes:
   pgdata:

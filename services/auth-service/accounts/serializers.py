@@ -1,26 +1,52 @@
 import bcrypt
 from rest_framework import serializers
 
-from .models import User
+from .models import Usuario, Cliente
 
 
-class UserSerializer(serializers.ModelSerializer):
+class UsuarioSerializer(serializers.ModelSerializer):
     """
-    Serializer basico de User, sin JWT todavia.
-    - 'password' es write_only: entra en texto plano, nunca se devuelve.
-    - 'password_hash' nunca se expone en la respuesta.
-    - El hash se genera con bcrypt antes de guardar (requerimiento del proyecto).
+    Serializer de Usuario para CRUD completo, sin JWT/roles todavia.
+    - 'contrasena' es write_only. Requerido al crear (POST).
+      Opcional al actualizar (PUT/PATCH): si no se manda, se conserva el hash actual.
+    - 'contrasena_hash' nunca se expone en la respuesta.
     """
-    password = serializers.CharField(write_only=True, min_length=8)
+    contrasena = serializers.CharField(write_only=True, min_length=8, required=False)
 
     class Meta:
-        model = User
-        fields = ['id', 'email', 'password', 'role', 'account_status', 'created_at']
-        read_only_fields = ['id', 'account_status', 'created_at']
+        model = Usuario
+        fields = ['id', 'correo', 'contrasena', 'rol', 'estado_cuenta', 'creado_en']
+        read_only_fields = ['id', 'creado_en']
 
     def create(self, validated_data):
-        raw_password = validated_data.pop('password')
-        password_hash = bcrypt.hashpw(
-            raw_password.encode('utf-8'), bcrypt.gensalt()
-        ).decode('utf-8')
-        return User.objects.create(password_hash=password_hash, **validated_data)
+        contrasena_plana = validated_data.pop('contrasena', None)
+        if not contrasena_plana:
+            raise serializers.ValidationError(
+                {'contrasena': 'Este campo es requerido al crear un usuario.'}
+            )
+        validated_data['contrasena_hash'] = self._hash(contrasena_plana)
+        return Usuario.objects.create(**validated_data)
+
+    def update(self, instance, validated_data):
+        contrasena_plana = validated_data.pop('contrasena', None)
+        if contrasena_plana:
+            instance.contrasena_hash = self._hash(contrasena_plana)
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+        instance.save()
+        return instance
+
+    @staticmethod
+    def _hash(contrasena_plana):
+        return bcrypt.hashpw(contrasena_plana.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+
+
+class ClienteSerializer(serializers.ModelSerializer):
+    """
+    Perfil de negocio del cliente, ligado 1 a 1 con un Usuario existente.
+    'usuario' se manda como el id (UUID) del Usuario al crear.
+    """
+    class Meta:
+        model = Cliente
+        fields = ['id', 'usuario', 'nombre_completo', 'telefono', 'idioma_preferido', 'puntos_lealtad']
+        read_only_fields = ['id']

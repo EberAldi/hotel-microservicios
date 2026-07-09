@@ -39,16 +39,12 @@ DATABASES = {
         'PASSWORD': os.getenv('DB_PASSWORD'),
         'HOST': os.getenv('DB_HOST'),
         'PORT': os.getenv('DB_PORT'),
-        'OPTIONS': {
-            'options': f"-c search_path={os.getenv('DB_SCHEMA')}"
-        },
     }
 }
 
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': (
-        'rest_framework_simplejwt.authentication.JWTAuthentication',
-    ),
+    # Sin JWT todavia: se agrega 'rest_framework_simplejwt.authentication.JWTAuthentication'
+    # aqui cuando implementemos login/registro con tokens.
 }
 
 SIMPLE_JWT = {
