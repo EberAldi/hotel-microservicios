@@ -42,15 +42,17 @@ DATABASES = {
 }
 
 REST_FRAMEWORK = {
-    # Sin JWT todavia: se agrega 'rest_framework_simplejwt.authentication.JWTAuthentication'
-    # aqui cuando implementemos login/registro con tokens.
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'accounts.authentication.JWTRolAuthentication',
+    ),
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=2),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
-    'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': True,
+    'ROTATE_REFRESH_TOKENS': False,
+    'BLACKLIST_AFTER_ROTATION': False,
+    'SIGNING_KEY': os.getenv('JWT_SECRET_KEY', SECRET_KEY),
 }
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'

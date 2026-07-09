@@ -4,23 +4,20 @@ from rest_framework.response import Response
 
 from .models import Resena
 from .serializers import ResenaSerializer
+from .permissions import EsClienteOAdmin
 
 
 class ResenaViewSet(viewsets.ModelViewSet):
     """
-    GET    /api/resenas/resenas/       -> lista (soporta filtros por query param)
-    POST   /api/resenas/resenas/       -> crea
-    GET    /api/resenas/resenas/{id}/  -> detalle
-    PUT    /api/resenas/resenas/{id}/  -> reemplaza (responde con mensaje simple)
-    PATCH  /api/resenas/resenas/{id}/  -> actualiza parcial (responde con mensaje simple)
-    DELETE /api/resenas/resenas/{id}/  -> elimina (responde con mensaje simple)
-
-    Filtros opcionales por query param:
-      /api/resenas/resenas/?tipo_objetivo=HABITACION&objetivo_id=<uuid>
-      /api/resenas/resenas/?cliente_id=<uuid>
+    GET (lista/detalle/filtros)  -> publico, incluso invitado sin token
+    POST/PUT/PATCH/DELETE        -> requiere JWT con rol 'cliente' o 'admin'
     """
     serializer_class = ResenaSerializer
-    permission_classes = [AllowAny]
+
+    def get_permissions(self):
+        if self.request.method in ('GET', 'HEAD', 'OPTIONS'):
+            return [AllowAny()]
+        return [EsClienteOAdmin()]
 
     def get_queryset(self):
         queryset = Resena.objects.all().order_by('-id')
