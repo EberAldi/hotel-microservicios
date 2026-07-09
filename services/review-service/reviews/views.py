@@ -1,5 +1,6 @@
-from rest_framework import viewsets
+from rest_framework import viewsets, status
 from rest_framework.permissions import AllowAny
+from rest_framework.response import Response
 
 from .models import Resena
 from .serializers import ResenaSerializer
@@ -10,9 +11,9 @@ class ResenaViewSet(viewsets.ModelViewSet):
     GET    /api/resenas/resenas/       -> lista (soporta filtros por query param)
     POST   /api/resenas/resenas/       -> crea
     GET    /api/resenas/resenas/{id}/  -> detalle
-    PUT    /api/resenas/resenas/{id}/  -> reemplaza
-    PATCH  /api/resenas/resenas/{id}/  -> actualiza parcial
-    DELETE /api/resenas/resenas/{id}/  -> elimina
+    PUT    /api/resenas/resenas/{id}/  -> reemplaza (responde con mensaje simple)
+    PATCH  /api/resenas/resenas/{id}/  -> actualiza parcial (responde con mensaje simple)
+    DELETE /api/resenas/resenas/{id}/  -> elimina (responde con mensaje simple)
 
     Filtros opcionales por query param:
       /api/resenas/resenas/?tipo_objetivo=HABITACION&objetivo_id=<uuid>
@@ -33,3 +34,15 @@ class ResenaViewSet(viewsets.ModelViewSet):
         if cliente_id:
             queryset = queryset.filter(cliente_id=cliente_id)
         return queryset
+
+    def update(self, request, *args, **kwargs):
+        super().update(request, *args, **kwargs)
+        return Response({'mensaje': 'Reseña modificada correctamente'}, status=status.HTTP_200_OK)
+
+    def partial_update(self, request, *args, **kwargs):
+        super().partial_update(request, *args, **kwargs)
+        return Response({'mensaje': 'Reseña modificada correctamente'}, status=status.HTTP_200_OK)
+
+    def destroy(self, request, *args, **kwargs):
+        super().destroy(request, *args, **kwargs)
+        return Response({'mensaje': 'Reseña eliminada correctamente'}, status=status.HTTP_200_OK)
