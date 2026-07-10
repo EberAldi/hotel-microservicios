@@ -1,16 +1,7 @@
 from rest_framework.permissions import BasePermission
 
 
-class EsClienteOAdmin(BasePermission):
-    def has_permission(self, request, view):
-        usuario = request.user
-        return bool(
-            usuario and getattr(usuario, 'is_authenticated', False)
-            and getattr(usuario, 'rol', None) in ('cliente', 'admin')
-        )
-
-
-class EsDuenoResenaOAdmin(BasePermission):
+class EsDuenoPagoOAdmin(BasePermission):
     def has_permission(self, request, view):
         usuario = request.user
         return bool(

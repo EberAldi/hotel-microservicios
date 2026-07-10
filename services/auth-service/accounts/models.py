@@ -41,3 +41,18 @@ class Cliente(models.Model):
 
     def __str__(self):
         return self.nombre_completo
+    
+class TokenRefresco(models.Model):
+    """
+    Registro de refresh tokens emitidos, para poder revocarlos (logout,
+    blacklist). No se guarda el token en texto plano, solo su hash.
+    """
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    usuario = models.ForeignKey(Usuario, on_delete=models.CASCADE, related_name='refresh_tokens')
+    token_hash = models.CharField(max_length=255, unique=True)
+    expira_en = models.DateTimeField()
+    revocado = models.BooleanField(default=False)
+    creado_en = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'refresh_tokens'

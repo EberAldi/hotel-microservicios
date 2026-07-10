@@ -1,23 +1,31 @@
 from rest_framework import viewsets, status
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
+from rest_framework.exceptions import PermissionDenied
 
 from .models import Resena
 from .serializers import ResenaSerializer
-from .permissions import EsClienteOAdmin
+from .permissions import EsClienteOAdmin, EsDuenoResenaOAdmin
 
 
 class ResenaViewSet(viewsets.ModelViewSet):
     """
     GET (lista/detalle/filtros)  -> publico, incluso invitado sin token
-    POST/PUT/PATCH/DELETE        -> requiere JWT con rol 'cliente' o 'admin'
+    POST                          -> requiere JWT con rol 'cliente' o 'admin'
+    PUT/PATCH/DELETE              -> solo el dueño de la reseña o admin
+
+    Filtros opcionales por query param:
+      /api/resenas/resenas/?tipo_objetivo=HABITACION&objetivo_id=<uuid>
+      /api/resenas/resenas/?cliente_id=<uuid>
     """
     serializer_class = ResenaSerializer
 
     def get_permissions(self):
         if self.request.method in ('GET', 'HEAD', 'OPTIONS'):
             return [AllowAny()]
-        return [EsClienteOAdmin()]
+        if self.action == 'create':
+            return [EsClienteOAdmin()]
+        return [EsDuenoResenaOAdmin()]
 
     def get_queryset(self):
         queryset = Resena.objects.all().order_by('-id')
@@ -31,6 +39,16 @@ class ResenaViewSet(viewsets.ModelViewSet):
         if cliente_id:
             queryset = queryset.filter(cliente_id=cliente_id)
         return queryset
+
+    def perform_create(self, serializer):
+        usuario = self.request.user
+        if usuario.rol == 'cliente':
+            serializer.save(cliente_id=usuario.cliente_id)
+        else:
+            cliente_id = self.request.data.get('cliente_id')
+            if not cliente_id:
+                raise PermissionDenied('Como admin, debes indicar cliente_id en el body.')
+            serializer.save(cliente_id=cliente_id)
 
     def update(self, request, *args, **kwargs):
         super().update(request, *args, **kwargs)

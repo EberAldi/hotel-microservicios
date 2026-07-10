@@ -25,11 +25,6 @@ MIDDLEWARE = [
 ROOT_URLCONF = 'config.urls'
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# Este servicio migra SOLO sus propias apps (ver INSTALLED_APPS arriba).
-# Se conecta con su propio rol de Postgres (svc_payment), que solo tiene permisos
-# sobre el schema 'payment_svc' -- aunque la BD fisica sea la misma para los 5
-# servicios, cada quien corre "python manage.py migrate" de forma
-# independiente y solo puede crear/alterar tablas dentro de su propio schema.
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -42,15 +37,17 @@ DATABASES = {
 }
 
 REST_FRAMEWORK = {
-    # Sin JWT todavia: se agrega 'rest_framework_simplejwt.authentication.JWTAuthentication'
-    # aqui cuando implementemos login/registro con tokens.
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'common.authentication.JWTRolAuthentication',
+    ),
 }
 
 SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=15),
+    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=2),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
-    'ROTATE_REFRESH_TOKENS': True,
-    'BLACKLIST_AFTER_ROTATION': True,
+    'ROTATE_REFRESH_TOKENS': False,
+    'BLACKLIST_AFTER_ROTATION': False,
+    'SIGNING_KEY': os.getenv('JWT_SECRET_KEY', SECRET_KEY),
 }
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
