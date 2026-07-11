@@ -16,8 +16,7 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.auth',
     'rest_framework',
-    'corsheaders',
-    'reviews',
+    'corsheaders'
 ]
 
 MIDDLEWARE = [
