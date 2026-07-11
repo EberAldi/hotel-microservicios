@@ -16,7 +16,8 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.auth',
     'rest_framework',
-    'corsheaders'
+    'corsheaders',
+    'accounts',
 ]
 
 MIDDLEWARE = [
@@ -45,7 +46,7 @@ DATABASES = {
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'reviews.authentication.JWTRolAuthentication',
+        'accounts.authentication.JWTRolAuthentication',
     ),
 }
 

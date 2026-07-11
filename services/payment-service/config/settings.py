@@ -17,7 +17,8 @@ INSTALLED_APPS = [
     'django.contrib.auth',
     'rest_framework',
     'corsheaders',
-    'reviews',
+    'common',
+    'payments',
 ]
 
 MIDDLEWARE = [
@@ -41,10 +42,9 @@ DATABASES = {
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'reviews.authentication.JWTRolAuthentication',
+        'common.authentication.JWTRolAuthentication',
     ),
 }
-
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(minutes=2),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
