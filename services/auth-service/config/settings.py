@@ -16,7 +16,8 @@ INSTALLED_APPS = [
     'django.contrib.contenttypes',
     'django.contrib.auth',
     'rest_framework',
-    'corsheaders'
+    'corsheaders',
+    'accounts',
 ]
 
 MIDDLEWARE = [
@@ -45,7 +46,7 @@ DATABASES = {
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'reviews.authentication.JWTRolAuthentication',
+        'accounts.authentication.JWTRolAuthentication',
     ),
 }
 
@@ -59,4 +60,4 @@ SIMPLE_JWT = {
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-CORS_ALLOWED_ORIGINS = os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",")
+CORS_ALLOWED_ORIGINS = [o for o in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",") if o]
