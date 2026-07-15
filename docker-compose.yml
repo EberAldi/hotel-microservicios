@@ -27,8 +27,8 @@ services:
       postgres:
         condition: service_healthy
     command: >
-      sh -c "python manage.py makemigrations && python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:3001"
-
+      sh -c "python manage.py makemigrations && python manage.py migrate && python manage.py crear_admin && gunicorn config.wsgi:application --bind 0.0.0.0:3001"
+  
   catalog-service:
     build: ./services/catalog-service
     restart: unless-stopped
@@ -36,12 +36,14 @@ services:
       - ./services/catalog-service/.env
     ports:
       - "3002:3002"
+    volumes:
+      - catalog_media:/app/media
     depends_on:
       postgres:
         condition: service_healthy
     command: >
       sh -c "python manage.py makemigrations && python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:3002"
-
+  
   reservation-service:
     build: ./services/reservation-service
     restart: unless-stopped
@@ -83,3 +85,4 @@ services:
 
 volumes:
   pgdata:
+  catalog_media:

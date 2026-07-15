@@ -46,3 +46,17 @@ class EsPropioClienteOAdmin(BasePermission):
         if getattr(usuario, 'rol', None) == 'admin':
             return True
         return str(obj.usuario_id) == str(usuario.id)
+    
+class EsDuenoDireccionOAdmin(BasePermission):
+    def has_permission(self, request, view):
+        usuario = request.user
+        return bool(
+            usuario and getattr(usuario, 'is_authenticated', False)
+            and getattr(usuario, 'rol', None) in ('cliente', 'admin')
+        )
+
+    def has_object_permission(self, request, view, obj):
+        usuario = request.user
+        if usuario.rol == 'admin':
+            return True
+        return str(obj.cliente.usuario_id) == str(usuario.id)

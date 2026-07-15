@@ -1,0 +1,703 @@
+openapi: 3.0.3
+info:
+  title: Hotel Reservas - Catalog Service
+  description: >
+    Catalogo de habitaciones y servicios extra del hotel: tipos de habitacion,
+    habitaciones, disponibilidad por fecha, categorias de servicio, servicios
+    e imagenes (subidas reales, servidas desde /media/). Base de datos propia
+    (catalog_db).
+  version: "1.0.0"
+servers:
+  - url: http://localhost:3002
+    description: Local / Docker Compose
+
+tags:
+  - name: Tipos de Habitacion
+  - name: Habitaciones
+  - name: Imagenes de Habitacion
+  - name: Disponibilidad
+  - name: Categorias de Servicio
+  - name: Servicios
+  - name: Imagenes de Servicio
+
+paths:
+  /api/catalogo/tipos-habitacion/:
+    get:
+      tags: [Tipos de Habitacion]
+      summary: Listar tipos de habitacion
+      description: Publico, no requiere token.
+      security: []
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/TipoHabitacion' }
+    post:
+      tags: [Tipos de Habitacion]
+      summary: Crear un tipo de habitacion
+      description: Solo admin.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TipoHabitacionCrear' }
+      responses:
+        '201':
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TipoHabitacion' }
+        '401': { description: No autenticado }
+        '403': { description: No es admin }
+
+  /api/catalogo/tipos-habitacion/{id}/:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Tipos de Habitacion]
+      summary: Detalle de un tipo de habitacion
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/TipoHabitacion' }
+    put:
+      tags: [Tipos de Habitacion]
+      summary: Reemplazar un tipo de habitacion
+      description: Solo admin.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/TipoHabitacionCrear' }
+      responses:
+        '200':
+          description: Modificado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+    delete:
+      tags: [Tipos de Habitacion]
+      summary: Eliminar un tipo de habitacion
+      description: Solo admin. Falla con 409 si hay habitaciones usando este tipo.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Eliminado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+        '409':
+          description: Hay habitaciones que usan este tipo, no se puede eliminar
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorDetalle' }
+
+  /api/catalogo/habitaciones/:
+    get:
+      tags: [Habitaciones]
+      summary: Listar habitaciones
+      description: Publico. Filtros opcionales por query param.
+      security: []
+      parameters:
+        - name: estado
+          in: query
+          schema: { type: string, enum: [disponible, mantenimiento, deshabilitada] }
+        - name: tipo
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Habitacion' }
+    post:
+      tags: [Habitaciones]
+      summary: Crear una habitacion
+      description: Solo admin.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/HabitacionCrear' }
+      responses:
+        '201':
+          description: Creada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Habitacion' }
+        '403': { description: No es admin }
+
+  /api/catalogo/habitaciones/{id}/:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Habitaciones]
+      summary: Detalle de una habitacion
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Habitacion' }
+    put:
+      tags: [Habitaciones]
+      summary: Reemplazar una habitacion
+      description: Solo admin.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/HabitacionCrear' }
+      responses:
+        '200':
+          description: Modificada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+    delete:
+      tags: [Habitaciones]
+      summary: Eliminar una habitacion
+      description: Solo admin.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Eliminada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+
+  /api/catalogo/imagenes-habitacion/:
+    get:
+      tags: [Imagenes de Habitacion]
+      summary: Listar imagenes de habitaciones
+      description: Publico. Filtro opcional por habitacion_id.
+      security: []
+      parameters:
+        - name: habitacion_id
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ImagenHabitacion' }
+    post:
+      tags: [Imagenes de Habitacion]
+      summary: Subir una imagen de habitacion
+      description: >
+        Solo admin. IMPORTANTE: este endpoint espera multipart/form-data,
+        no JSON, porque incluye un archivo binario.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [habitacion, imagen]
+              properties:
+                habitacion: { type: string, format: uuid }
+                imagen: { type: string, format: binary }
+                orden: { type: integer, default: 0 }
+                es_principal: { type: boolean, default: false }
+                alt_text: { type: string }
+      responses:
+        '201':
+          description: Creada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImagenHabitacion' }
+        '403': { description: No es admin }
+
+  /api/catalogo/imagenes-habitacion/{id}/:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Imagenes de Habitacion]
+      summary: Detalle de una imagen
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImagenHabitacion' }
+    delete:
+      tags: [Imagenes de Habitacion]
+      summary: Eliminar una imagen
+      description: Solo admin.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Eliminada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+
+  /api/catalogo/disponibilidad-habitacion/:
+    get:
+      tags: [Disponibilidad]
+      summary: Listar disponibilidad por fecha
+      description: Publico. Filtros opcionales por query param.
+      security: []
+      parameters:
+        - name: habitacion_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: fecha
+          in: query
+          schema: { type: string, format: date }
+        - name: estado
+          in: query
+          schema: { type: string, enum: [disponible, ocupada, bloqueada] }
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Disponibilidad' }
+    post:
+      tags: [Disponibilidad]
+      summary: Registrar disponibilidad para una fecha
+      description: >
+        Solo admin. Una habitacion no puede tener dos registros para la
+        misma fecha (unique_together habitacion+fecha).
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DisponibilidadCrear' }
+      responses:
+        '201':
+          description: Creada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Disponibilidad' }
+        '400': { description: "Ya existe un registro para esa habitacion y fecha" }
+
+  /api/catalogo/disponibilidad-habitacion/{id}/:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Disponibilidad]
+      summary: Detalle de disponibilidad
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Disponibilidad' }
+    put:
+      tags: [Disponibilidad]
+      summary: Actualizar el estado de disponibilidad
+      description: Solo admin.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DisponibilidadCrear' }
+      responses:
+        '200':
+          description: Modificada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+    delete:
+      tags: [Disponibilidad]
+      summary: Eliminar un registro de disponibilidad
+      description: Solo admin.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Eliminada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+
+  /api/catalogo/categorias-servicio/:
+    get:
+      tags: [Categorias de Servicio]
+      summary: Listar categorias de servicio
+      security: []
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/CategoriaServicio' }
+    post:
+      tags: [Categorias de Servicio]
+      summary: Crear una categoria
+      description: Solo admin.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CategoriaServicioCrear' }
+      responses:
+        '201':
+          description: Creada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CategoriaServicio' }
+
+  /api/catalogo/categorias-servicio/{id}/:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Categorias de Servicio]
+      summary: Detalle de una categoria
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CategoriaServicio' }
+    put:
+      tags: [Categorias de Servicio]
+      summary: Reemplazar una categoria
+      description: Solo admin.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CategoriaServicioCrear' }
+      responses:
+        '200':
+          description: Modificada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+    delete:
+      tags: [Categorias de Servicio]
+      summary: Eliminar una categoria
+      description: Solo admin. Falla con 409 si hay servicios usando esta categoria.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Eliminada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+        '409':
+          description: Hay servicios que usan esta categoria, no se puede eliminar
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorDetalle' }
+
+  /api/catalogo/servicios/:
+    get:
+      tags: [Servicios]
+      summary: Listar servicios
+      description: Publico. Filtro opcional por categoria.
+      security: []
+      parameters:
+        - name: categoria
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Servicio' }
+    post:
+      tags: [Servicios]
+      summary: Crear un servicio
+      description: Solo admin.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ServicioCrear' }
+      responses:
+        '201':
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Servicio' }
+
+  /api/catalogo/servicios/{id}/:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Servicios]
+      summary: Detalle de un servicio
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Servicio' }
+    put:
+      tags: [Servicios]
+      summary: Reemplazar un servicio
+      description: Solo admin.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ServicioCrear' }
+      responses:
+        '200':
+          description: Modificado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+    delete:
+      tags: [Servicios]
+      summary: Eliminar un servicio
+      description: Solo admin.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Eliminado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+
+  /api/catalogo/imagenes-servicio/:
+    get:
+      tags: [Imagenes de Servicio]
+      summary: Listar imagenes de servicios
+      description: Publico. Filtro opcional por servicio_id.
+      security: []
+      parameters:
+        - name: servicio_id
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ImagenServicio' }
+    post:
+      tags: [Imagenes de Servicio]
+      summary: Subir una imagen de servicio
+      description: >
+        Solo admin. IMPORTANTE: este endpoint espera multipart/form-data,
+        no JSON, porque incluye un archivo binario.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [servicio, imagen]
+              properties:
+                servicio: { type: string, format: uuid }
+                imagen: { type: string, format: binary }
+                orden: { type: integer, default: 0 }
+                es_principal: { type: boolean, default: false }
+                alt_text: { type: string }
+      responses:
+        '201':
+          description: Creada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImagenServicio' }
+
+  /api/catalogo/imagenes-servicio/{id}/:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Imagenes de Servicio]
+      summary: Detalle de una imagen
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ImagenServicio' }
+    delete:
+      tags: [Imagenes de Servicio]
+      summary: Eliminar una imagen
+      description: Solo admin.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Eliminada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        Token obtenido en auth-service (/api/auth/login/). Enviar como header:
+        Authorization: Bearer <access>
+
+  schemas:
+    MensajeSimple:
+      type: object
+      properties:
+        mensaje: { type: string, example: "Habitación modificada correctamente" }
+
+    ErrorDetalle:
+      type: object
+      properties:
+        detail: { type: string, example: "No se puede eliminar: hay habitaciones que usan este tipo." }
+
+    TipoHabitacion:
+      type: object
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        nombre: { type: string }
+        descripcion: { type: string }
+        capacidad_maxima: { type: integer }
+
+    TipoHabitacionCrear:
+      type: object
+      required: [nombre, capacidad_maxima]
+      properties:
+        nombre: { type: string, example: Suite }
+        descripcion: { type: string }
+        capacidad_maxima: { type: integer, example: 4 }
+
+    Habitacion:
+      type: object
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        numero: { type: string }
+        tipo: { type: string, format: uuid }
+        tipo_nombre: { type: string, readOnly: true }
+        precio_base: { type: string, example: "1500.00" }
+        estado: { type: string, enum: [disponible, mantenimiento, deshabilitada] }
+
+    HabitacionCrear:
+      type: object
+      required: [numero, tipo, precio_base]
+      properties:
+        numero: { type: string, example: "101" }
+        tipo: { type: string, format: uuid }
+        precio_base: { type: number, format: decimal, example: 1500.00 }
+        estado: { type: string, enum: [disponible, mantenimiento, deshabilitada] }
+
+    ImagenHabitacion:
+      type: object
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        habitacion: { type: string, format: uuid }
+        imagen_url: { type: string, format: uri, readOnly: true }
+        orden: { type: integer }
+        es_principal: { type: boolean }
+        alt_text: { type: string }
+
+    Disponibilidad:
+      type: object
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        habitacion: { type: string, format: uuid }
+        fecha: { type: string, format: date }
+        estado: { type: string, enum: [disponible, ocupada, bloqueada] }
+
+    DisponibilidadCrear:
+      type: object
+      required: [habitacion, fecha]
+      properties:
+        habitacion: { type: string, format: uuid }
+        fecha: { type: string, format: date, example: "2026-08-01" }
+        estado: { type: string, enum: [disponible, ocupada, bloqueada] }
+
+    CategoriaServicio:
+      type: object
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        nombre: { type: string }
+        descripcion: { type: string }
+
+    CategoriaServicioCrear:
+      type: object
+      required: [nombre]
+      properties:
+        nombre: { type: string, example: Spa }
+        descripcion: { type: string }
+
+    Servicio:
+      type: object
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        nombre: { type: string }
+        categoria: { type: string, format: uuid }
+        categoria_nombre: { type: string, readOnly: true }
+        precio: { type: string, example: "800.00" }
+
+    ServicioCrear:
+      type: object
+      required: [nombre, categoria, precio]
+      properties:
+        nombre: { type: string, example: "Masaje relajante 60 min" }
+        categoria: { type: string, format: uuid }
+        precio: { type: number, format: decimal, example: 800.00 }
+
+    ImagenServicio:
+      type: object
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        servicio: { type: string, format: uuid }
+        imagen_url: { type: string, format: uri, readOnly: true }
+        orden: { type: integer }
+        es_principal: { type: boolean }
+        alt_text: { type: string }

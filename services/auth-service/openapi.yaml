@@ -1,0 +1,513 @@
+openapi: 3.0.3
+info:
+  title: Hotel Reservas - Auth Service
+  description: >
+    Autenticacion, usuarios, perfiles de cliente, direcciones y auditoria de accesos.
+    Base de datos propia (auth_db), independiente de los demas microservicios.
+  version: "1.0.0"
+servers:
+  - url: http://localhost:3001
+    description: Local / Docker Compose
+
+tags:
+  - name: Auth
+    description: Login, refresh y logout (JWT)
+  - name: Usuarios
+    description: Cuenta de acceso (correo + contrasena + rol)
+  - name: Clientes
+    description: Perfil de negocio, 1 a 1 con Usuario
+  - name: Direcciones
+    description: Direcciones de un cliente
+  - name: Auditoria
+    description: Bitacora de intentos de login (solo lectura, solo admin)
+
+paths:
+  /api/auth/login/:
+    post:
+      tags: [Auth]
+      summary: Iniciar sesion
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [correo, contrasena]
+              properties:
+                correo: { type: string, format: email, example: cliente1@example.com }
+                contrasena: { type: string, format: password, example: password123 }
+      responses:
+        '200':
+          description: Login exitoso
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access: { type: string, description: "JWT de acceso, expira en 2 minutos" }
+                  refresh: { type: string, description: "JWT de refresco, expira en 7 dias" }
+                  rol: { type: string, enum: [cliente, admin] }
+        '401':
+          description: Credenciales invalidas
+        '403':
+          description: Cuenta inactiva o suspendida
+
+  /api/auth/login/refresh/:
+    post:
+      tags: [Auth]
+      summary: Renovar el access token usando un refresh token valido
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh]
+              properties:
+                refresh: { type: string }
+      responses:
+        '200':
+          description: Nuevo access token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access: { type: string }
+        '401':
+          description: Refresh token invalido, expirado, revocado o no reconocido
+
+  /api/auth/logout/:
+    post:
+      tags: [Auth]
+      summary: Revocar un refresh token (cierra esa sesion)
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [refresh]
+              properties:
+                refresh: { type: string }
+      responses:
+        '200':
+          description: Sesion cerrada correctamente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MensajeSimple'
+        '404':
+          description: Refresh token no reconocido
+
+  /api/auth/usuarios/:
+    get:
+      tags: [Usuarios]
+      summary: Listar todos los usuarios
+      description: Solo admin.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Lista de usuarios
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Usuario' }
+        '401': { description: No autenticado }
+        '403': { description: No es admin }
+    post:
+      tags: [Usuarios]
+      summary: Registrar un nuevo usuario
+      description: >
+        Publico, sin token. El rol siempre se fuerza a 'cliente' en el servidor,
+        sin importar lo que se mande en el body (medida de seguridad).
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UsuarioCrear'
+      responses:
+        '201':
+          description: Usuario creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Usuario' }
+        '400': { description: Correo repetido o contrasena invalida }
+
+  /api/auth/usuarios/{id}/:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Usuarios]
+      summary: Detalle de un usuario
+      description: El propio usuario o admin.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Usuario' }
+        '401': { description: No autenticado }
+        '403': { description: No es el propio usuario ni admin }
+        '404': { description: No existe }
+    put:
+      tags: [Usuarios]
+      summary: Reemplazar un usuario
+      description: El propio usuario o admin. La contrasena es opcional (si no se manda, se conserva).
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UsuarioActualizar' }
+      responses:
+        '200':
+          description: Modificado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+        '401': { description: No autenticado }
+        '403': { description: No es el propio usuario ni admin }
+    patch:
+      tags: [Usuarios]
+      summary: Actualizar parcialmente un usuario
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UsuarioActualizar' }
+      responses:
+        '200':
+          description: Modificado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+    delete:
+      tags: [Usuarios]
+      summary: Eliminar un usuario
+      description: Solo admin.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Eliminado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+        '403': { description: No es admin }
+
+  /api/auth/clientes/:
+    get:
+      tags: [Clientes]
+      summary: Listar todos los perfiles de cliente
+      description: Solo admin.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Cliente' }
+        '403': { description: No es admin }
+    post:
+      tags: [Clientes]
+      summary: Crear el perfil de cliente del usuario autenticado
+      description: >
+        Requiere estar logueado como cliente. El campo 'usuario' se asigna
+        automaticamente desde el token, no se puede mandar en el body.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClienteCrear' }
+      responses:
+        '201':
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Cliente' }
+        '400': { description: "Este usuario ya tiene un perfil de cliente (relacion 1 a 1)" }
+        '401': { description: No autenticado }
+
+  /api/auth/clientes/{id}/:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Clientes]
+      summary: Detalle de un cliente
+      description: El propio dueño o admin.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Cliente' }
+        '403': { description: No es el dueño ni admin }
+    put:
+      tags: [Clientes]
+      summary: Reemplazar un cliente
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClienteCrear' }
+      responses:
+        '200':
+          description: Modificado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+    patch:
+      tags: [Clientes]
+      summary: Actualizar parcialmente un cliente
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClienteCrear' }
+      responses:
+        '200':
+          description: Modificado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+    delete:
+      tags: [Clientes]
+      summary: Eliminar un cliente
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Eliminado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+
+  /api/auth/direcciones/:
+    get:
+      tags: [Direcciones]
+      summary: Listar direcciones
+      description: Cliente ve solo las suyas. Admin ve todas.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Direccion' }
+    post:
+      tags: [Direcciones]
+      summary: Crear una direccion
+      description: >
+        Cliente: 'cliente' se asigna solo desde el token.
+        Admin: debe mandar 'cliente' (uuid) en el body.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DireccionCrear' }
+      responses:
+        '201':
+          description: Creada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Direccion' }
+
+  /api/auth/direcciones/{id}/:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Direcciones]
+      summary: Detalle de una direccion
+      description: El dueño (cliente) o admin.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Direccion' }
+        '403': { description: No es el dueño ni admin }
+    put:
+      tags: [Direcciones]
+      summary: Reemplazar una direccion
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/DireccionCrear' }
+      responses:
+        '200':
+          description: Modificada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+    delete:
+      tags: [Direcciones]
+      summary: Eliminar una direccion
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Eliminada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+
+  /api/auth/auditoria-accesos/:
+    get:
+      tags: [Auditoria]
+      summary: Listar todos los intentos de login (exitosos y fallidos)
+      description: Solo lectura, solo admin. Se llena automaticamente en cada login.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/AuditoriaAcceso' }
+        '403': { description: No es admin }
+
+  /api/auth/auditoria-accesos/{id}/:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Auditoria]
+      summary: Detalle de un intento de login
+      description: Solo admin.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AuditoriaAcceso' }
+        '403': { description: No es admin }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        Token obtenido en /api/auth/login/. Enviar como header:
+        Authorization: Bearer <access>
+
+  schemas:
+    MensajeSimple:
+      type: object
+      properties:
+        mensaje: { type: string, example: "Usuario modificado correctamente" }
+
+    Usuario:
+      type: object
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        correo: { type: string, format: email }
+        rol: { type: string, enum: [cliente, admin] }
+        estado_cuenta: { type: string, enum: [activo, suspendido, inactivo] }
+        creado_en: { type: string, format: date-time, readOnly: true }
+
+    UsuarioCrear:
+      type: object
+      required: [correo, contrasena]
+      properties:
+        correo: { type: string, format: email }
+        contrasena: { type: string, format: password, minLength: 8 }
+
+    UsuarioActualizar:
+      type: object
+      properties:
+        correo: { type: string, format: email }
+        contrasena: { type: string, format: password, minLength: 8, description: "Opcional, si no se manda se conserva el hash actual" }
+        rol: { type: string, enum: [cliente, admin] }
+        estado_cuenta: { type: string, enum: [activo, suspendido, inactivo] }
+
+    Cliente:
+      type: object
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        usuario: { type: string, format: uuid, readOnly: true }
+        nombre_completo: { type: string }
+        telefono: { type: string }
+        idioma_preferido: { type: string, example: es }
+        puntos_lealtad: { type: integer, default: 0 }
+
+    ClienteCrear:
+      type: object
+      required: [nombre_completo]
+      properties:
+        nombre_completo: { type: string }
+        telefono: { type: string }
+        idioma_preferido: { type: string }
+        puntos_lealtad: { type: integer }
+
+    Direccion:
+      type: object
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        cliente: { type: string, format: uuid, readOnly: true }
+        calle: { type: string }
+        numero_exterior: { type: string }
+        colonia: { type: string }
+        ciudad: { type: string }
+        estado_provincia: { type: string }
+        codigo_postal: { type: string }
+        pais: { type: string, default: Mexico }
+        es_principal: { type: boolean, default: false }
+
+    DireccionCrear:
+      type: object
+      required: [calle, ciudad]
+      properties:
+        cliente: { type: string, format: uuid, description: "Solo lo manda un admin; un cliente lo trae automatico del token" }
+        calle: { type: string }
+        numero_exterior: { type: string }
+        colonia: { type: string }
+        ciudad: { type: string }
+        estado_provincia: { type: string }
+        codigo_postal: { type: string }
+        pais: { type: string }
+        es_principal: { type: boolean }
+
+    AuditoriaAcceso:
+      type: object
+      readOnly: true
+      properties:
+        id: { type: string, format: uuid }
+        usuario: { type: string, format: uuid, nullable: true }
+        correo_intentado: { type: string, format: email }
+        ip: { type: string, nullable: true }
+        user_agent: { type: string }
+        exitoso: { type: boolean }
+        creado_en: { type: string, format: date-time }

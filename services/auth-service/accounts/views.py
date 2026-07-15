@@ -13,6 +13,11 @@ from .serializers import UsuarioSerializer, ClienteSerializer
 from .permissions import EsAdmin, EsPropioUsuarioOAdmin, EsPropioClienteOAdmin
 from .utils import hash_token
 
+from rest_framework.exceptions import PermissionDenied
+from .models import Usuario, Cliente, Direccion, AuditoriaAcceso
+from .serializers import UsuarioSerializer, ClienteSerializer, DireccionSerializer, AuditoriaAccesoSerializer
+from .permissions import EsAdmin, EsPropioUsuarioOAdmin, EsPropioClienteOAdmin, EsDuenoDireccionOAdmin
+
 
 def _claims_para(usuario):
     """Arma los claims comunes (correo, rol, cliente_id) para access y refresh."""
@@ -31,19 +36,35 @@ class LoginView(APIView):
     def post(self, request):
         correo = request.data.get('correo')
         contrasena = request.data.get('contrasena')
+        ip = request.META.get('REMOTE_ADDR')
+        user_agent = request.META.get('HTTP_USER_AGENT', '')[:300]
+
         if not correo or not contrasena:
             return Response({'detail': 'correo y contrasena son requeridos.'}, status=400)
 
         try:
             usuario = Usuario.objects.get(correo=correo)
         except Usuario.DoesNotExist:
+            AuditoriaAcceso.objects.create(
+                usuario=None, correo_intentado=correo, ip=ip, user_agent=user_agent, exitoso=False
+            )
             return Response({'detail': 'Credenciales invalidas.'}, status=401)
 
         if not bcrypt.checkpw(contrasena.encode('utf-8'), usuario.contrasena_hash.encode('utf-8')):
+            AuditoriaAcceso.objects.create(
+                usuario=usuario, correo_intentado=correo, ip=ip, user_agent=user_agent, exitoso=False
+            )
             return Response({'detail': 'Credenciales invalidas.'}, status=401)
 
         if usuario.estado_cuenta != 'activo':
+            AuditoriaAcceso.objects.create(
+                usuario=usuario, correo_intentado=correo, ip=ip, user_agent=user_agent, exitoso=False
+            )
             return Response({'detail': 'Cuenta inactiva o suspendida.'}, status=403)
+
+        AuditoriaAcceso.objects.create(
+            usuario=usuario, correo_intentado=correo, ip=ip, user_agent=user_agent, exitoso=True
+        )
 
         claims = _claims_para(usuario)
 
@@ -183,3 +204,51 @@ class ClienteViewSet(viewsets.ModelViewSet):
     def destroy(self, request, *args, **kwargs):
         super().destroy(request, *args, **kwargs)
         return Response({'mensaje': 'Cliente eliminado correctamente'}, status=status.HTTP_200_OK)
+    
+    
+class DireccionViewSet(viewsets.ModelViewSet):
+    """
+    Direcciones de un cliente. Solo el dueño (via su Cliente) o admin.
+    POST: 'cliente' se asigna solo, tomado del cliente_id del token.
+    """
+    serializer_class = DireccionSerializer
+    permission_classes = [EsDuenoDireccionOAdmin]
+
+    def get_queryset(self):
+        usuario = self.request.user
+        queryset = Direccion.objects.select_related('cliente').all()
+        if usuario.rol == 'cliente':
+            queryset = queryset.filter(cliente_id=usuario.cliente_id)
+        return queryset
+
+    def perform_create(self, serializer):
+        usuario = self.request.user
+        if usuario.rol == 'cliente':
+            serializer.save(cliente_id=usuario.cliente_id)
+        else:
+            cliente_id = self.request.data.get('cliente')
+            if not cliente_id:
+                raise PermissionDenied('Como admin, debes indicar cliente en el body.')
+            serializer.save(cliente_id=cliente_id)
+
+    def update(self, request, *args, **kwargs):
+        super().update(request, *args, **kwargs)
+        return Response({'mensaje': 'Dirección modificada correctamente'}, status=status.HTTP_200_OK)
+
+    def partial_update(self, request, *args, **kwargs):
+        super().partial_update(request, *args, **kwargs)
+        return Response({'mensaje': 'Dirección modificada correctamente'}, status=status.HTTP_200_OK)
+
+    def destroy(self, request, *args, **kwargs):
+        super().destroy(request, *args, **kwargs)
+        return Response({'mensaje': 'Dirección eliminada correctamente'}, status=status.HTTP_200_OK)
+
+
+class AuditoriaAccesoViewSet(viewsets.ReadOnlyModelViewSet):
+    """
+    Solo lectura, solo admin. Bitacora de intentos de login (exitosos y
+    fallidos). No se crea/edita/borra via API, se llena sola desde LoginView.
+    """
+    queryset = AuditoriaAcceso.objects.all().order_by('-creado_en')
+    serializer_class = AuditoriaAccesoSerializer
+    permission_classes = [EsAdmin]

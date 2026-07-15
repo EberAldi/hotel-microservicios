@@ -1,4 +1,5 @@
 import bcrypt
+from .models import Usuario, Cliente, Direccion, AuditoriaAcceso
 from rest_framework import serializers
 
 from .models import Usuario, Cliente
@@ -67,3 +68,17 @@ class ClienteSerializer(serializers.ModelSerializer):
             'puntos_lealtad'
         ]
         read_only_fields = ['id', 'usuario']
+        
+class DireccionSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Direccion
+        fields = ['id', 'cliente', 'calle', 'numero_exterior', 'colonia', 'ciudad',
+                  'estado_provincia', 'codigo_postal', 'pais', 'es_principal']
+        read_only_fields = ['id', 'cliente']
+
+
+class AuditoriaAccesoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = AuditoriaAcceso
+        fields = ['id', 'usuario', 'correo_intentado', 'ip', 'user_agent', 'exitoso', 'creado_en']
+        read_only_fields = fields  # nunca se crea/edita manual, solo lectura
