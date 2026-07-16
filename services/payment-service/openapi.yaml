@@ -1,0 +1,373 @@
+openapi: 3.0.3
+info:
+  title: Hotel Reservas - Payment Service
+  description: >
+    Pagos (de una reservacion O de un carrito, nunca ambos), facturas
+    (generadas automaticamente al confirmar un pago) y reembolsos
+    (solicitados por el cliente, aprobados/rechazados solo por admin).
+    Al crear un pago, se verifica en vivo contra reservation-service
+    (reenviando el token del cliente) que la reservacion/carrito exista
+    y le pertenezca. Base de datos propia (payment_db).
+  version: "1.0.0"
+servers:
+  - url: http://localhost:3004
+    description: Local / Docker Compose
+
+tags:
+  - name: Pagos
+  - name: Facturas
+  - name: Reembolsos
+
+paths:
+  /api/pagos/pagos/:
+    get:
+      tags: [Pagos]
+      summary: Listar pagos
+      description: Cliente ve solo los suyos. Admin ve todos y puede filtrar.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: reservacion_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: carrito_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: estado
+          in: query
+          schema: { type: string, enum: [pendiente, exitoso, fallido, reembolsado] }
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Pago' }
+    post:
+      tags: [Pagos]
+      summary: Crear un pago
+      description: >
+        Exactamente uno de reservacion_id/carrito_id, nunca ambos, nunca
+        ninguno. Se verifica en vivo contra reservation-service (con el
+        mismo token) que el recurso exista y pertenezca al cliente.
+        cliente_id se asigna automaticamente desde el token.
+        El pago se crea en estado 'pendiente' -- usar /confirmar/ despues
+        para marcarlo como pagado de verdad.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PagoCrear' }
+      responses:
+        '201':
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Pago' }
+        '400': { description: "Debe indicarse exactamente uno: reservacion_id o carrito_id" }
+        '403': { description: "El recurso no te pertenece" }
+        '404': { description: "El recurso indicado no existe" }
+        '503': { description: reservation-service no disponible en este momento }
+
+  /api/pagos/pagos/{id}/:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Pagos]
+      summary: Detalle de un pago
+      description: Solo el dueño o admin.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Pago' }
+        '403': { description: No es el dueño ni admin }
+    put:
+      tags: [Pagos]
+      summary: Reemplazar datos del pago
+      description: >
+        NO permite cambiar 'estado' (es read-only aqui a proposito).
+        Para eso usar /confirmar/ o /marcar-fallido/.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PagoActualizar' }
+      responses:
+        '200':
+          description: Modificado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+    patch:
+      tags: [Pagos]
+      summary: Actualizar parcialmente (ej. id_transaccion)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/PagoActualizar' }
+      responses:
+        '200':
+          description: Modificado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+    delete:
+      tags: [Pagos]
+      summary: Eliminar un pago
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Eliminado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+
+  /api/pagos/pagos/{id}/confirmar/:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Pagos]
+      summary: Confirmar un pago como exitoso
+      description: >
+        UNICA forma legitima de marcar un pago como 'exitoso' (no se puede
+        via PUT/PATCH normal). Genera automaticamente una Factura si el
+        pago no tenia una todavia.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                id_transaccion: { type: string, example: "TXN-ABC123" }
+      responses:
+        '200':
+          description: Confirmado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje: { type: string, example: "Pago confirmado correctamente" }
+                  numero_factura: { type: string, example: "FAC-00001" }
+        '400': { description: "Este pago ya esta confirmado" }
+
+  /api/pagos/pagos/{id}/marcar-fallido/:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Pagos]
+      summary: Marcar un pago como fallido
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Marcado como fallido
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+        '400': { description: "No se puede marcar como fallido un pago ya exitoso" }
+
+  /api/pagos/facturas/:
+    get:
+      tags: [Facturas]
+      summary: Listar facturas
+      description: Solo lectura, se generan automaticamente. Cliente ve las suyas, admin ve todas.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Factura' }
+
+  /api/pagos/facturas/{id}/:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Facturas]
+      summary: Detalle de una factura
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Factura' }
+
+  /api/pagos/reembolsos/:
+    get:
+      tags: [Reembolsos]
+      summary: Listar reembolsos
+      description: Cliente ve los de sus pagos. Admin ve todos.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Reembolso' }
+    post:
+      tags: [Reembolsos]
+      summary: Solicitar un reembolso
+      description: >
+        Solo sobre un pago propio. Siempre se crea en estado 'pendiente',
+        sin importar lo que se mande.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReembolsoCrear' }
+      responses:
+        '201':
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Reembolso' }
+        '403': { description: El pago no te pertenece }
+
+  /api/pagos/reembolsos/{id}/:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Reembolsos]
+      summary: Detalle de un reembolso
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Reembolso' }
+    patch:
+      tags: [Reembolsos]
+      summary: Aprobar o rechazar un reembolso
+      description: Exclusivo de admin. Un cliente no puede aprobarse su propio reembolso.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                estado: { type: string, enum: [aprobado, rechazado] }
+      responses:
+        '200':
+          description: Modificado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+        '403': { description: Solo un admin puede aprobar o rechazar }
+    delete:
+      tags: [Reembolsos]
+      summary: Eliminar un reembolso
+      description: Exclusivo de admin.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Eliminado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+        '403': { description: Solo un admin puede eliminar }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        Token obtenido en auth-service (/api/auth/login/). Enviar como header:
+        Authorization: Bearer <access>
+
+  schemas:
+    MensajeSimple:
+      type: object
+      properties:
+        mensaje: { type: string, example: "Pago modificado correctamente" }
+
+    Pago:
+      type: object
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        reservacion_id: { type: string, format: uuid, nullable: true }
+        carrito_id: { type: string, format: uuid, nullable: true }
+        cliente_id: { type: string, format: uuid, readOnly: true }
+        monto: { type: string, example: "6000.00" }
+        metodo: { type: string, enum: [tarjeta, paypal, efectivo] }
+        estado: { type: string, enum: [pendiente, exitoso, fallido, reembolsado], readOnly: true }
+        id_transaccion: { type: string }
+
+    PagoCrear:
+      type: object
+      required: [monto, metodo]
+      properties:
+        reservacion_id: { type: string, format: uuid, description: "Uno de los dos, nunca ambos" }
+        carrito_id: { type: string, format: uuid, description: "Uno de los dos, nunca ambos" }
+        cliente_id: { type: string, format: uuid, description: "Solo lo manda un admin" }
+        monto: { type: number, format: decimal, example: 6000.00 }
+        metodo: { type: string, enum: [tarjeta, paypal, efectivo] }
+
+    PagoActualizar:
+      type: object
+      properties:
+        id_transaccion: { type: string }
+        monto: { type: number, format: decimal }
+        metodo: { type: string, enum: [tarjeta, paypal, efectivo] }
+
+    Factura:
+      type: object
+      readOnly: true
+      properties:
+        id: { type: string, format: uuid }
+        pago: { type: string, format: uuid }
+        numero_factura: { type: string, example: "FAC-00001" }
+        fecha_emision: { type: string, format: date-time }
+        url_pdf: { type: string, format: uri, nullable: true, description: "Vacio por ahora, generacion de PDF fuera de alcance" }
+
+    Reembolso:
+      type: object
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        pago: { type: string, format: uuid }
+        monto: { type: string, example: "6000.00" }
+        motivo: { type: string }
+        estado: { type: string, enum: [pendiente, aprobado, rechazado], readOnly: true }
+        creado_en: { type: string, format: date-time, readOnly: true }
+
+    ReembolsoCrear:
+      type: object
+      required: [pago, monto, motivo]
+      properties:
+        pago: { type: string, format: uuid }
+        monto: { type: number, format: decimal, example: 6000.00 }
+        motivo: { type: string, example: "Cambio de planes" }
+        
