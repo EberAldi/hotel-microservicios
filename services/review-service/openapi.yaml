@@ -1,0 +1,344 @@
+openapi: 3.0.3
+info:
+  title: Hotel Reservas - Review Service
+  description: >
+    Reseñas de habitaciones, reservaciones o servicios, con moderacion
+    reactiva (se publican automaticamente, un admin puede ocultarlas
+    despues), y respuestas a reseñas (hilo abierto: puede responder el
+    hotel/admin o cualquier otro cliente). Referencias logicas
+    (cliente_id, objetivo_id) hacia otras bases, sin FK fisica.
+    Base de datos propia (review_db).
+  version: "1.1.0"
+servers:
+  - url: http://localhost:3005
+    description: Local / Docker Compose
+
+tags:
+  - name: Reseñas
+  - name: Respuestas a Reseñas
+
+paths:
+  /api/resenas/resenas/:
+    get:
+      tags: [Reseñas]
+      summary: Listar reseñas
+      description: >
+        Publico, no requiere token. Invitados y clientes ven SOLO reseñas
+        en estado 'aprobada'. Un token de admin ve todas y puede filtrar
+        por estado. Soporta filtros opcionales por query param.
+      security: []
+      parameters:
+        - name: tipo_objetivo
+          in: query
+          schema: { type: string, enum: [HABITACION, RESERVACION, SERVICIO] }
+        - name: objetivo_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: cliente_id
+          in: query
+          schema: { type: string, format: uuid }
+        - name: estado
+          in: query
+          description: Solo tiene efecto si el token es de admin
+          schema: { type: string, enum: [aprobada, oculta] }
+      responses:
+        '200':
+          description: Lista de reseñas
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Resena' }
+    post:
+      tags: [Reseñas]
+      summary: Crear una reseña
+      description: >
+        Requiere JWT con rol 'cliente' o 'admin'. cliente_id se asigna
+        automaticamente desde el token si el rol es 'cliente'. La reseña
+        SIEMPRE se crea en estado 'aprobada' (moderacion reactiva) --
+        'estado' no se puede fijar en la creacion, cualquier valor
+        mandado en el body se ignora.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResenaCrear' }
+      responses:
+        '201':
+          description: Creada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Resena' }
+        '400': { description: "Datos invalidos (ej. calificacion fuera de 1-5)" }
+        '401': { description: No autenticado }
+        '403': { description: "Rol invalido, o admin sin mandar cliente_id" }
+
+  /api/resenas/resenas/{id}/:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Reseñas]
+      summary: Detalle de una reseña
+      description: Publico, no requiere token.
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Resena' }
+        '404': { description: No existe }
+    put:
+      tags: [Reseñas]
+      summary: Reemplazar comentario/calificacion de una reseña
+      description: >
+        Solo el dueño (cliente que la creo) o admin. NO permite cambiar
+        'estado' (es read-only aqui a proposito) -- para eso usar /moderar/.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResenaActualizar' }
+      responses:
+        '200':
+          description: Modificada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+        '403': { description: No es el dueño ni admin }
+    patch:
+      tags: [Reseñas]
+      summary: Actualizar parcialmente (comentario/calificacion)
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ResenaActualizar' }
+      responses:
+        '200':
+          description: Modificada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+    delete:
+      tags: [Reseñas]
+      summary: Eliminar una reseña
+      description: Solo el dueño (cliente que la creo) o admin.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Eliminada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+        '403': { description: No es el dueño ni admin }
+
+  /api/resenas/resenas/{id}/moderar/:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Reseñas]
+      summary: Aprobar u ocultar una reseña
+      description: >
+        Exclusivo de admin. Unica forma legitima de cambiar 'estado' de
+        una reseña (no se puede via PUT/PATCH normal).
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [estado]
+              properties:
+                estado: { type: string, enum: [aprobada, oculta] }
+      responses:
+        '200':
+          description: Estado actualizado
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje: { type: string, example: "Reseña marcada como oculta" }
+        '400': { description: "estado debe ser 'aprobada' u 'oculta'" }
+        '403': { description: No es admin }
+
+  /api/resenas/respuestas-resena/:
+    get:
+      tags: [Respuestas a Reseñas]
+      summary: Listar respuestas a reseñas
+      description: Publico, no requiere token. Filtro opcional por resena_id.
+      security: []
+      parameters:
+        - name: resena_id
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Lista, ordenadas cronologicamente
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/RespuestaResena' }
+    post:
+      tags: [Respuestas a Reseñas]
+      summary: Responder a una reseña
+      description: >
+        Requiere JWT con rol 'cliente' o 'admin'. Hilo abierto: puede
+        responder tanto el hotel (admin) como cualquier otro cliente.
+        autor_tipo y autor_id se asignan automaticamente desde el token,
+        nunca se mandan en el body.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RespuestaResenaCrear' }
+      responses:
+        '201':
+          description: Creada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RespuestaResena' }
+        '401': { description: No autenticado }
+
+  /api/resenas/respuestas-resena/{id}/:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Respuestas a Reseñas]
+      summary: Detalle de una respuesta
+      description: Publico, no requiere token.
+      security: []
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/RespuestaResena' }
+    put:
+      tags: [Respuestas a Reseñas]
+      summary: Editar el contenido de una respuesta
+      description: Solo el autor de la respuesta (admin o el cliente que la escribio) o cualquier admin.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RespuestaResenaActualizar' }
+      responses:
+        '200':
+          description: Modificada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+        '403': { description: No es el autor ni admin }
+    patch:
+      tags: [Respuestas a Reseñas]
+      summary: Actualizar parcialmente el contenido
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RespuestaResenaActualizar' }
+      responses:
+        '200':
+          description: Modificada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+    delete:
+      tags: [Respuestas a Reseñas]
+      summary: Eliminar una respuesta
+      description: Solo el autor de la respuesta o cualquier admin.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Eliminada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+        '403': { description: No es el autor ni admin }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        Token obtenido en auth-service (/api/auth/login/). Enviar como header:
+        Authorization: Bearer <access>
+
+  schemas:
+    MensajeSimple:
+      type: object
+      properties:
+        mensaje: { type: string, example: "Reseña modificada correctamente" }
+
+    Resena:
+      type: object
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        cliente_id: { type: string, format: uuid, readOnly: true }
+        tipo_objetivo: { type: string, enum: [HABITACION, RESERVACION, SERVICIO] }
+        objetivo_id: { type: string, format: uuid }
+        calificacion: { type: integer, minimum: 1, maximum: 5 }
+        comentario: { type: string }
+        estado: { type: string, enum: [aprobada, oculta], readOnly: true }
+
+    ResenaCrear:
+      type: object
+      required: [tipo_objetivo, objetivo_id, calificacion]
+      properties:
+        cliente_id: { type: string, format: uuid, description: "Solo lo manda un admin" }
+        tipo_objetivo: { type: string, enum: [HABITACION, RESERVACION, SERVICIO] }
+        objetivo_id: { type: string, format: uuid }
+        calificacion: { type: integer, minimum: 1, maximum: 5, example: 5 }
+        comentario: { type: string, example: "Excelente habitacion" }
+
+    ResenaActualizar:
+      type: object
+      properties:
+        tipo_objetivo: { type: string, enum: [HABITACION, RESERVACION, SERVICIO] }
+        objetivo_id: { type: string, format: uuid }
+        calificacion: { type: integer, minimum: 1, maximum: 5 }
+        comentario: { type: string }
+
+    RespuestaResena:
+      type: object
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        resena: { type: string, format: uuid }
+        autor_tipo: { type: string, enum: [admin, cliente], readOnly: true }
+        autor_id: { type: string, format: uuid, readOnly: true }
+        contenido: { type: string }
+        creado_en: { type: string, format: date-time, readOnly: true }
+
+    RespuestaResenaCrear:
+      type: object
+      required: [resena, contenido]
+      properties:
+        resena: { type: string, format: uuid }
+        contenido: { type: string, example: "Gracias por tu comentario, esperamos verte pronto de nuevo" }
+
+    RespuestaResenaActualizar:
+      type: object
+      required: [contenido]
+      properties:
+        contenido: { type: string }
