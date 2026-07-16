@@ -1,0 +1,552 @@
+openapi: 3.0.3
+info:
+  title: Hotel Reservas - Reservation Service
+  description: >
+    Reservaciones de habitaciones, servicios agregados a una reservacion
+    (con precio real consultado en vivo a catalog-service), historial
+    automatico de cambios de estado, y carritos de servicios sueltos
+    (sin necesidad de reservacion). Base de datos propia (reservation_db).
+  version: "1.0.0"
+servers:
+  - url: http://localhost:3003
+    description: Local / Docker Compose
+
+tags:
+  - name: Reservaciones
+  - name: Servicios de Reservacion
+  - name: Historial de Estados
+  - name: Carritos
+  - name: Items de Carrito
+
+paths:
+  /api/reservaciones/reservaciones/:
+    get:
+      tags: [Reservaciones]
+      summary: Listar reservaciones
+      description: >
+        Cliente ve solo las suyas (el filtro por query param no aplica para
+        cliente). Admin ve todas y puede filtrar.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: cliente_id
+          in: query
+          description: Solo tiene efecto si el token es de admin
+          schema: { type: string, format: uuid }
+        - name: estado
+          in: query
+          schema: { type: string, enum: [draft, pendiente_pago, confirmada, cancelada] }
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Reservacion' }
+        '401': { description: No autenticado }
+    post:
+      tags: [Reservaciones]
+      summary: Crear una reservacion
+      description: >
+        cliente_id se asigna automaticamente desde el token si el rol es
+        'cliente'; un admin debe mandarlo explicito en el body. Se registra
+        automaticamente en el historial de estados al crearse.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReservacionCrear' }
+      responses:
+        '201':
+          description: Creada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Reservacion' }
+        '403': { description: "Rol invalido, o admin sin mandar cliente_id" }
+
+  /api/reservaciones/reservaciones/{id}/:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Reservaciones]
+      summary: Detalle de una reservacion
+      description: Solo el dueño o admin.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Reservacion' }
+        '403': { description: No es el dueño ni admin }
+    put:
+      tags: [Reservaciones]
+      summary: Reemplazar una reservacion
+      description: >
+        Solo el dueño o admin. Si 'estado' cambia respecto al valor
+        anterior, se registra automaticamente en el historial. Se puede
+        mandar un 'motivo' opcional (no se guarda como campo del modelo,
+        solo se usa para el historial).
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReservacionActualizar' }
+      responses:
+        '200':
+          description: Modificada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+    patch:
+      tags: [Reservaciones]
+      summary: Actualizar parcialmente una reservacion
+      description: Igual que PUT, pero campos opcionales. Tipico para cambiar solo 'estado'.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReservacionActualizar' }
+      responses:
+        '200':
+          description: Modificada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+    delete:
+      tags: [Reservaciones]
+      summary: Eliminar una reservacion
+      description: Solo el dueño o admin.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Eliminada
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+
+  /api/reservaciones/reservacion-servicios/:
+    get:
+      tags: [Servicios de Reservacion]
+      summary: Listar servicios agregados a reservaciones
+      description: Cliente ve solo los de sus reservaciones. Admin ve todos.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/ReservacionServicio' }
+    post:
+      tags: [Servicios de Reservacion]
+      summary: Agregar un servicio a una reservacion
+      description: >
+        IMPORTANTE: precio_unitario NUNCA se manda en el body -- se
+        consulta en vivo a catalog-service usando servicio_id, para evitar
+        que el cliente manipule el precio. Solo se puede agregar a
+        reservaciones propias.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReservacionServicioCrear' }
+      responses:
+        '201':
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReservacionServicio' }
+        '403': { description: La reservacion no te pertenece }
+        '404': { description: El servicio_id no existe en el catalogo }
+        '503': { description: catalog-service no disponible en este momento }
+
+  /api/reservaciones/reservacion-servicios/{id}/:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Servicios de Reservacion]
+      summary: Detalle de un servicio de reservacion
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ReservacionServicio' }
+    put:
+      tags: [Servicios de Reservacion]
+      summary: Reemplazar cantidad/servicio
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ReservacionServicioCrear' }
+      responses:
+        '200':
+          description: Modificado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+    delete:
+      tags: [Servicios de Reservacion]
+      summary: Quitar un servicio de la reservacion
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Eliminado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+
+  /api/reservaciones/historial-estados-reservacion/:
+    get:
+      tags: [Historial de Estados]
+      summary: Listar historial de cambios de estado
+      description: >
+        Solo lectura. Se llena automaticamente, no se crea via API.
+        Cliente ve el historial de sus reservaciones, admin ve todo.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: reservacion_id
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/HistorialEstado' }
+
+  /api/reservaciones/historial-estados-reservacion/{id}/:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Historial de Estados]
+      summary: Detalle de un registro de historial
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/HistorialEstado' }
+
+  /api/reservaciones/carritos/:
+    get:
+      tags: [Carritos]
+      summary: Listar carritos
+      description: Cliente ve solo el suyo. Admin ve todos.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/Carrito' }
+    post:
+      tags: [Carritos]
+      summary: Crear un carrito
+      description: >
+        cliente_id se asigna automaticamente desde el token. Solo se
+        permite UN carrito 'activo' por cliente a la vez.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CarritoCrear' }
+      responses:
+        '201':
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Carrito' }
+        '400': { description: "Ya existe un carrito activo para este cliente" }
+
+  /api/reservaciones/carritos/{id}/:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Carritos]
+      summary: Detalle de un carrito
+      description: Solo el dueño o admin.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Carrito' }
+    put:
+      tags: [Carritos]
+      summary: Actualizar expira_en
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CarritoCrear' }
+      responses:
+        '200':
+          description: Modificado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+    delete:
+      tags: [Carritos]
+      summary: Eliminar un carrito
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Eliminado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+
+  /api/reservaciones/carritos/{id}/checkout/:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    post:
+      tags: [Carritos]
+      summary: Hacer checkout del carrito
+      description: >
+        Marca el carrito como 'pendiente_pago', listo para ser cobrado en
+        payment-service. Falla si el carrito no esta 'activo' o esta vacio.
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Carrito listo para pago
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  mensaje: { type: string, example: "Carrito listo para pago" }
+                  carrito_id: { type: string, format: uuid }
+        '400':
+          description: "Carrito no esta activo, o esta vacio"
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ErrorDetalle' }
+
+  /api/reservaciones/carrito-items/:
+    get:
+      tags: [Items de Carrito]
+      summary: Listar items de carrito
+      description: Cliente ve solo los de su carrito. Admin ve todos.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - name: carrito_id
+          in: query
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Lista
+          content:
+            application/json:
+              schema:
+                type: array
+                items: { $ref: '#/components/schemas/CarritoItem' }
+    post:
+      tags: [Items de Carrito]
+      summary: Agregar un item al carrito
+      description: >
+        IMPORTANTE: precio_unitario_snapshot NUNCA se manda en el body --
+        se consulta en vivo a catalog-service usando servicio_id. Solo se
+        puede agregar a un carrito propio y en estado 'activo'.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CarritoItemCrear' }
+      responses:
+        '201':
+          description: Creado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CarritoItem' }
+        '400': { description: "El carrito no es tuyo, o no esta activo" }
+        '404': { description: El servicio_id no existe en el catalogo }
+        '503': { description: catalog-service no disponible en este momento }
+
+  /api/reservaciones/carrito-items/{id}/:
+    parameters:
+      - name: id
+        in: path
+        required: true
+        schema: { type: string, format: uuid }
+    get:
+      tags: [Items de Carrito]
+      summary: Detalle de un item de carrito
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/CarritoItem' }
+    put:
+      tags: [Items de Carrito]
+      summary: Modificar cantidad/fecha de uso
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CarritoItemCrear' }
+      responses:
+        '200':
+          description: Modificado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+    delete:
+      tags: [Items de Carrito]
+      summary: Quitar un item del carrito
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: Eliminado
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/MensajeSimple' }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        Token obtenido en auth-service (/api/auth/login/). Enviar como header:
+        Authorization: Bearer <access>
+
+  schemas:
+    MensajeSimple:
+      type: object
+      properties:
+        mensaje: { type: string, example: "Reservación modificada correctamente" }
+
+    ErrorDetalle:
+      type: object
+      properties:
+        detail: { type: string, example: "El carrito esta vacio." }
+
+    Reservacion:
+      type: object
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        cliente_id: { type: string, format: uuid, readOnly: true }
+        habitacion_id: { type: string, format: uuid }
+        fecha_entrada: { type: string, format: date }
+        fecha_salida: { type: string, format: date }
+        estado: { type: string, enum: [draft, pendiente_pago, confirmada, cancelada] }
+        precio_total: { type: string, example: "6000.00" }
+
+    ReservacionCrear:
+      type: object
+      required: [habitacion_id, fecha_entrada, fecha_salida]
+      properties:
+        cliente_id: { type: string, format: uuid, description: "Solo lo manda un admin" }
+        habitacion_id: { type: string, format: uuid }
+        fecha_entrada: { type: string, format: date, example: "2026-08-01" }
+        fecha_salida: { type: string, format: date, example: "2026-08-05" }
+        estado: { type: string, enum: [draft, pendiente_pago, confirmada, cancelada] }
+        precio_total: { type: number, format: decimal }
+
+    ReservacionActualizar:
+      type: object
+      properties:
+        habitacion_id: { type: string, format: uuid }
+        fecha_entrada: { type: string, format: date }
+        fecha_salida: { type: string, format: date }
+        estado: { type: string, enum: [draft, pendiente_pago, confirmada, cancelada] }
+        precio_total: { type: number, format: decimal }
+        motivo: { type: string, description: "Opcional, se guarda en el historial de estados si 'estado' cambio" }
+
+    ReservacionServicio:
+      type: object
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        reservacion: { type: string, format: uuid }
+        servicio_id: { type: string, format: uuid }
+        cantidad: { type: integer, default: 1 }
+        precio_unitario: { type: string, readOnly: true, description: "Consultado a catalog-service, nunca lo manda el cliente" }
+
+    ReservacionServicioCrear:
+      type: object
+      required: [reservacion, servicio_id]
+      properties:
+        reservacion: { type: string, format: uuid }
+        servicio_id: { type: string, format: uuid }
+        cantidad: { type: integer, default: 1 }
+
+    HistorialEstado:
+      type: object
+      readOnly: true
+      properties:
+        id: { type: string, format: uuid }
+        reservacion: { type: string, format: uuid }
+        estado_anterior: { type: string }
+        estado_nuevo: { type: string }
+        motivo: { type: string }
+        cambiado_en: { type: string, format: date-time }
+
+    Carrito:
+      type: object
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        cliente_id: { type: string, format: uuid, readOnly: true }
+        estado: { type: string, enum: [activo, pendiente_pago, pagado, cancelado, expirado], readOnly: true }
+        creado_en: { type: string, format: date-time, readOnly: true }
+        expira_en: { type: string, format: date-time, nullable: true }
+
+    CarritoCrear:
+      type: object
+      properties:
+        cliente_id: { type: string, format: uuid, description: "Solo lo manda un admin" }
+        expira_en: { type: string, format: date-time }
+
+    CarritoItem:
+      type: object
+      properties:
+        id: { type: string, format: uuid, readOnly: true }
+        carrito: { type: string, format: uuid }
+        servicio_id: { type: string, format: uuid }
+        cantidad: { type: integer, default: 1 }
+        precio_unitario_snapshot: { type: string, readOnly: true, description: "Consultado a catalog-service, nunca lo manda el cliente" }
+        fecha_uso: { type: string, format: date, nullable: true }
+
+    CarritoItemCrear:
+      type: object
+      required: [carrito, servicio_id]
+      properties:
+        carrito: { type: string, format: uuid }
+        servicio_id: { type: string, format: uuid }
+        cantidad: { type: integer, default: 1 }
+        fecha_uso: { type: string, format: date }
