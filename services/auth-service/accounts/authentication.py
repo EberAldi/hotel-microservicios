@@ -1,27 +1,27 @@
-from rest_framework_simplejwt.authentication import JWTAuthentication
-from rest_framework_simplejwt.exceptions import AuthenticationFailed
+from rest_framework import permissions
 
 
-class UsuarioToken:
-    """Usuario autenticado, reconstruido solo desde los claims del JWT."""
-    is_authenticated = True
-
-    def __init__(self, id, correo, rol, cliente_id=None):
-        self.id = id
-        self.correo = correo
-        self.rol = rol
-        self.cliente_id = cliente_id  # None si el usuario es admin sin perfil de cliente
-
-    def __str__(self):
-        return self.correo
+class EsAdmin(permissions.BasePermission):
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated and request.user.rol == "admin")
 
 
-class JWTRolAuthentication(JWTAuthentication):
-    def get_user(self, validated_token):
-        user_id = validated_token.get('user_id')
-        correo = validated_token.get('correo')
-        rol = validated_token.get('rol')
-        cliente_id = validated_token.get('cliente_id')
-        if user_id is None or rol is None:
-            raise AuthenticationFailed('Token invalido: faltan claims requeridos.')
-        return UsuarioToken(id=user_id, correo=correo, rol=rol, cliente_id=cliente_id)
+class EsPropioUsuarioOAdmin(permissions.BasePermission):
+    """Para el recurso Usuario: el propio usuario o un admin."""
+    def has_object_permission(self, request, view, obj):
+        if request.user.rol == "admin":
+            return True
+        return obj.id == request.user.id
+
+
+class EsPropioClienteOAdmin(permissions.BasePermission):
+    """Para Cliente y Direccion: el dueño del perfil o un admin."""
+    def has_object_permission(self, request, view, obj):
+        if request.user.rol == "admin":
+            return True
+        cliente = getattr(request.user, "cliente", None)
+        if cliente is None:
+            return False
+        if hasattr(obj, "usuario_id"):  # es un Cliente
+            return obj.id == cliente.id
+        return obj.cliente_id == cliente.id  # es una Direccion
