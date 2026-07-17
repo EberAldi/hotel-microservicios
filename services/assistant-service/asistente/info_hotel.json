@@ -1,0 +1,17 @@
+{
+  "check_in": "3:00 PM",
+  "check_out": "12:00 PM",
+  "politica_cancelacion": "Cancelación gratuita hasta 48 horas antes de la fecha de entrada. Después de ese plazo, se cobra el importe de la primera noche.",
+  "wifi": "WiFi gratuito en todas las áreas del hotel, incluidas las habitaciones.",
+  "desayuno": "Incluido en tarifas tipo 'todo incluido'. En otras tarifas, disponible como servicio adicional.",
+  "mascotas": "No se permiten mascotas, con excepción de animales de servicio.",
+  "estacionamiento": "Estacionamiento gratuito para huéspedes con reservación activa.",
+  "horario_alberca": "7:00 AM a 10:00 PM.",
+  "contacto_recepcion": "Disponible las 24 horas para cualquier duda o emergencia.",
+  "ubicacion": "Av. Kukulcán Km 12.5, Zona Hotelera, Cancún, Quintana Roo, México. Ver en Google Maps: https://maps.google.com/?q=21.1200,-86.7500",
+  "telefonos_recepcion": [
+    "+52 998 123 4567 (recepción principal)",
+    "+52 998 123 4568 (concierge)",
+    "+52 998 123 4569 (reservaciones)"
+  ]
+}

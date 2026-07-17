@@ -1,0 +1,121 @@
+openapi: 3.0.3
+info:
+  title: Hotel Reservas - Assistant Service
+  description: >
+    Asistente de IA (Gemini) del hotel: widget de clima con recomendacion
+    interpretada, y chatbot de preguntas frecuentes que puede consultar en
+    vivo el catalogo (habitaciones/servicios) y las reservaciones propias
+    del cliente logueado. Servicio sin base de datos de negocio (sin
+    historial de conversaciones persistente).
+  version: "1.0.0"
+servers:
+  - url: http://localhost:3006
+    description: Local / Docker Compose
+
+tags:
+  - name: Clima
+  - name: Chat
+
+paths:
+  /api/asistente/clima/:
+    post:
+      tags: [Clima]
+      summary: Pronostico interpretado con recomendacion de IA
+      description: >
+        Publico, no requiere token. Geocodifica la ciudad (Open-Meteo,
+        gratis, sin API key), consulta el pronostico, y le pide a Gemini
+        una recomendacion breve para un huesped del hotel segun el clima.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ClimaPeticion' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ClimaRespuesta' }
+        '400': { description: "ciudad es requerida" }
+        '404': { description: No se encontro la ciudad indicada }
+        '503': { description: "El servicio de clima o el asistente de IA no esta disponible" }
+
+  /api/asistente/chat/:
+    post:
+      tags: [Chat]
+      summary: Chatbot de preguntas frecuentes del hotel
+      description: >
+        Requiere JWT (cliente o admin). Responde SOLO preguntas relacionadas
+        con el hotel (informacion fija, catalogo en vivo, o la reservacion
+        propia del cliente que hace la pregunta) -- rechaza temas fuera de
+        ese alcance. Puede usar herramientas internas (function-calling)
+        para consultar catalog-service (publico) y reservation-service
+        (reenviando el mismo token, respetando el ownership que ya existe
+        alla -- un cliente nunca puede ver reservaciones de otro).
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/ChatPeticion' }
+      responses:
+        '200':
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/ChatRespuesta' }
+        '400': { description: "mensaje es requerido" }
+        '401': { description: No autenticado }
+        '503': { description: El asistente de IA no esta disponible en este momento }
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        Token obtenido en auth-service (/api/auth/login/). Enviar como header:
+        Authorization: Bearer <access>
+
+  schemas:
+    ClimaPeticion:
+      type: object
+      required: [ciudad]
+      properties:
+        ciudad: { type: string, example: "Cancun" }
+        fecha:
+          type: string
+          format: date
+          example: "2026-08-01"
+          description: Opcional, default es hoy
+
+    ClimaRespuesta:
+      type: object
+      properties:
+        ciudad: { type: string, example: "Cancún" }
+        pais: { type: string, example: "Mexico" }
+        pronostico:
+          type: object
+          properties:
+            fecha: { type: string, format: date }
+            temp_maxima: { type: number, example: 32.5 }
+            temp_minima: { type: number, example: 24.1 }
+            probabilidad_lluvia: { type: number, example: 20 }
+        recomendacion:
+          type: string
+          example: "Excelente clima para disfrutar la alberca o una excursión al aire libre."
+
+    ChatPeticion:
+      type: object
+      required: [mensaje]
+      properties:
+        mensaje: { type: string, example: "¿A qué hora es el check-in?" }
+
+    ChatRespuesta:
+      type: object
+      properties:
+        respuesta:
+          type: string
+          example: "El check-in es a las 3:00 PM y el check-out a las 12:00 PM."

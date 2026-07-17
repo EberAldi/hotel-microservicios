@@ -83,6 +83,16 @@ services:
     command: >
       sh -c "python manage.py makemigrations && python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:3005"
 
+  assistant-service:
+    build: ./services/assistant-service
+    restart: unless-stopped
+    env_file:
+      - ./services/assistant-service/.env
+    ports:
+      - "3006:3006"
+    command: >
+      sh -c "python manage.py migrate && gunicorn config.wsgi:application --bind 0.0.0.0:3006"
+      
 volumes:
   pgdata:
   catalog_media:

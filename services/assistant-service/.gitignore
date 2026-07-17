@@ -1,0 +1,11 @@
+# Variables de entorno (secretos) -- nunca se suben, en NINGUN servicio
+.env
+**/.env
+!**/.env.example
+
+# Python
+__pycache__/
+*.pyc
+db.sqlite3
+
+# Migraciones locales si prefieres no versionarlas (opcional, revisa con tu equipo)
