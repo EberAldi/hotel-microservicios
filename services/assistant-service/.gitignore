@@ -1,5 +1,5 @@
 # Variables de entorno (secretos) -- nunca se suben, en NINGUN servicio
-.env
+
 **/.env
 !**/.env.example
 
