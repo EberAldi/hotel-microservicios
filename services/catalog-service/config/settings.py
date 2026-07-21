@@ -41,6 +41,13 @@ DATABASES = {
     }
 }
 
+# DB_SCHEMA es opcional: solo se usa en desarrollo local, cuando los 5
+# servicios comparten una sola base fisica ("hotel-desarrollodeservicios")
+# con un esquema Postgres por servicio. En docker-compose/produccion cada
+# servicio tiene su propia base (esquema "public" por defecto) y no hace falta.
+if os.getenv('DB_SCHEMA'):
+    DATABASES['default']['OPTIONS'] = {'options': f"-c search_path={os.getenv('DB_SCHEMA')},public"}
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'common.authentication.JWTRolAuthentication',
@@ -55,6 +62,11 @@ SIMPLE_JWT = {
     'BLACKLIST_AFTER_ROTATION': False,
     'SIGNING_KEY': os.getenv('JWT_SECRET_KEY', SECRET_KEY),
 }
+
+# Usados por common.authentication.JWTRolAuthentication para decodificar el
+# access token que emite auth-service (mismo secreto/algoritmo en los 5 servicios).
+JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', SECRET_KEY)
+JWT_ALGORITHM = 'HS256'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

@@ -1,4 +1,3 @@
-import bcrypt
 from django.core.management.base import BaseCommand
 from django.conf import settings
 
@@ -27,14 +26,13 @@ class Command(BaseCommand):
 
         usuario, creado = Usuario.objects.get_or_create(
             correo=correo,
-            defaults={
-                'contrasena_hash': bcrypt.hashpw(contrasena.encode('utf-8'), bcrypt.gensalt()).decode('utf-8'),
-                'rol': 'admin',
-                'estado_cuenta': 'activo',
-            }
+            defaults={'rol': 'admin', 'estado_cuenta': 'activo'},
         )
-
         if creado:
+            # set_password usa el hasher de Django (no bcrypt crudo), que es
+            # lo que Usuario.check_password() sabe verificar en el login.
+            usuario.set_password(contrasena)
+            usuario.save(update_fields=['password'])
             self.stdout.write(self.style.SUCCESS(f'Admin creado: {correo}'))
         elif usuario.rol != 'admin':
             usuario.rol = 'admin'

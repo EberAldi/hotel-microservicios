@@ -28,11 +28,8 @@ MIDDLEWARE = [
 ROOT_URLCONF = 'config.urls'
 WSGI_APPLICATION = 'config.wsgi.application'
 
-# Este servicio migra SOLO sus propias apps (ver INSTALLED_APPS arriba).
-# Se conecta a SU PROPIA base de datos (auth_db) con SU PROPIO rol (svc_auth),
-# dueño exclusivo de esa base -- database-per-service real, no schemas
-# compartidos. Cada servicio corre "python manage.py migrate" de forma
-# totalmente independiente sobre su propia base de datos.
+AUTH_USER_MODEL = 'accounts.Usuario'
+
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -44,22 +41,30 @@ DATABASES = {
     }
 }
 
+# DB_SCHEMA es opcional: solo se usa en desarrollo local, cuando los 5
+# servicios comparten una sola base fisica ("hotel-desarrollodeservicios")
+# con un esquema Postgres por servicio. En docker-compose/produccion cada
+# servicio tiene su propia base (esquema "public" por defecto) y no hace falta.
+if os.getenv('DB_SCHEMA'):
+    DATABASES['default']['OPTIONS'] = {'options': f"-c search_path={os.getenv('DB_SCHEMA')},public"}
+
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'accounts.authentication.JWTRolAuthentication',
     ),
 }
 
-SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=2),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
-    'ROTATE_REFRESH_TOKENS': False,
-    'BLACKLIST_AFTER_ROTATION': False,
-    'SIGNING_KEY': os.getenv('JWT_SECRET_KEY', SECRET_KEY),
-}
+# Claims propios (no se usa djangorestframework-simplejwt para firmar/verificar
+# access tokens: accounts/utils.py firma con PyJWT usando estas mismas
+# constantes, y accounts/authentication.py las decodifica igual).
+JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', SECRET_KEY)
+JWT_ALGORITHM = 'HS256'
+JWT_ACCESS_TOKEN_LIFETIME = timedelta(minutes=15)
+JWT_REFRESH_TOKEN_LIFETIME = timedelta(days=7)
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+CORS_ALLOW_ALL_ORIGINS = os.environ.get("CORS_ALLOW_ALL_ORIGINS", "False") == "True"
 CORS_ALLOWED_ORIGINS = [o for o in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",") if o]
 
 ADMIN_EMAIL = os.getenv('ADMIN_EMAIL')

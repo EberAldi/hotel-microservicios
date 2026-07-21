@@ -1,19 +1,20 @@
-from django.urls import path
+from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 
 from .views import (
-    UsuarioViewSet, ClienteViewSet, DireccionViewSet, AuditoriaAccesoViewSet,
-    LoginView, RefreshView, LogoutView,
+    AuditoriaAccesoViewSet, ClienteViewSet, DireccionViewSet,
+    LoginView, LogoutView, RefreshView, UsuarioViewSet,
 )
 
 router = DefaultRouter()
-router.register('usuarios', UsuarioViewSet, basename='usuario')
-router.register('clientes', ClienteViewSet, basename='cliente')
-router.register('direcciones', DireccionViewSet, basename='direccion')
-router.register('auditoria-accesos', AuditoriaAccesoViewSet, basename='auditoria-acceso')
+router.register("usuarios", UsuarioViewSet, basename="usuarios")
+router.register("clientes", ClienteViewSet, basename="clientes")
+router.register("direcciones", DireccionViewSet, basename="direcciones")
+router.register("auditoria-accesos", AuditoriaAccesoViewSet, basename="auditoria-accesos")
 
 urlpatterns = [
-    path('login/', LoginView.as_view(), name='login'),
-    path('login/refresh/', RefreshView.as_view(), name='login-refresh'),
-    path('logout/', LogoutView.as_view(), name='logout'),
-] + router.urls
+    path("login/", LoginView.as_view(), name="login"),
+    path("login/refresh/", RefreshView.as_view(), name="login-refresh"),
+    path("logout/", LogoutView.as_view(), name="logout"),
+    path("", include(router.urls)),
+]
