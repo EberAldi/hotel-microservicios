@@ -1,81 +1,70 @@
-from rest_framework import serializers
-from .models import AuditoriaAcceso, Cliente, Direccion, Usuario
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+from datetime import timedelta
 
+load_dotenv()
 
-class LoginSerializer(serializers.Serializer):
-    correo = serializers.EmailField()
-    contrasena = serializers.CharField(write_only=True)
+BASE_DIR = Path(__file__).resolve().parent.parent
 
+SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-key')
+DEBUG = os.getenv('DEBUG', 'False') == 'True'
 
-class RefreshSerializer(serializers.Serializer):
-    refresh = serializers.CharField()
+ALLOWED_HOSTS = ['*']
 
+INSTALLED_APPS = [
+    'django.contrib.contenttypes',
+    'django.contrib.auth',
+    'rest_framework',
+    'corsheaders',
+    'accounts',
+]
 
-class LogoutSerializer(serializers.Serializer):
-    refresh = serializers.CharField()
+MIDDLEWARE = [
+    'corsheaders.middleware.CorsMiddleware',
+    'django.middleware.common.CommonMiddleware',
+]
 
+ROOT_URLCONF = 'config.urls'
+WSGI_APPLICATION = 'config.wsgi.application'
 
-class UsuarioSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Usuario
-        fields = ["id", "correo", "rol", "estado_cuenta", "creado_en"]
-        read_only_fields = ["id", "rol", "creado_en"]
+AUTH_USER_MODEL = 'accounts.Usuario'
 
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.getenv('DB_NAME'),
+        'USER': os.getenv('DB_USER'),
+        'PASSWORD': os.getenv('DB_PASSWORD'),
+        'HOST': os.getenv('DB_HOST'),
+        'PORT': os.getenv('DB_PORT'),
+    }
+}
 
-class UsuarioCrearSerializer(serializers.ModelSerializer):
-    contrasena = serializers.CharField(write_only=True, min_length=8, source="password")
+# DB_SCHEMA es opcional: solo se usa en desarrollo local, cuando los 5
+# servicios comparten una sola base fisica ("hotel-desarrollodeservicios")
+# con un esquema Postgres por servicio. En docker-compose/produccion cada
+# servicio tiene su propia base (esquema "public" por defecto) y no hace falta.
+if os.getenv('DB_SCHEMA'):
+    DATABASES['default']['OPTIONS'] = {'options': f"-c search_path={os.getenv('DB_SCHEMA')},public"}
 
-    class Meta:
-        model = Usuario
-        fields = ["id", "correo", "contrasena", "rol", "estado_cuenta", "creado_en"]
-        read_only_fields = ["id", "rol", "estado_cuenta", "creado_en"]
+REST_FRAMEWORK = {
+    'DEFAULT_AUTHENTICATION_CLASSES': (
+        'accounts.authentication.JWTRolAuthentication',
+    ),
+}
 
-    def create(self, validated_data):
-        password = validated_data.pop("password")
-        usuario = Usuario(**validated_data)
-        usuario.set_password(password)
-        usuario.save()
-        return usuario
+# Claims propios (no se usa djangorestframework-simplejwt para firmar/verificar
+# access tokens: accounts/utils.py firma con PyJWT usando estas mismas
+# constantes, y accounts/authentication.py las decodifica igual).
+JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', SECRET_KEY)
+JWT_ALGORITHM = 'HS256'
+JWT_ACCESS_TOKEN_LIFETIME = timedelta(minutes=15)
+JWT_REFRESH_TOKEN_LIFETIME = timedelta(days=7)
 
+DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-class UsuarioActualizarSerializer(serializers.ModelSerializer):
-    contrasena = serializers.CharField(write_only=True, required=False, min_length=8, source="password")
+CORS_ALLOWED_ORIGINS = [o for o in os.environ.get("CORS_ALLOWED_ORIGINS", "").split(",") if o]
 
-    class Meta:
-        model = Usuario
-        fields = ["correo", "contrasena", "rol", "estado_cuenta"]
-
-
-class ClienteSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Cliente
-        fields = ["id", "usuario", "nombre_completo", "telefono", "idioma_preferido", "puntos_lealtad"]
-        read_only_fields = ["id", "usuario"]
-
-
-class ClienteCrearSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Cliente
-        fields = ["nombre_completo", "telefono", "idioma_preferido", "puntos_lealtad"]
-
-
-class DireccionSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Direccion
-        fields = ["id", "cliente", "calle", "numero_exterior", "colonia", "ciudad",
-                  "estado_provincia", "codigo_postal", "pais", "es_principal"]
-        read_only_fields = ["id", "cliente"]
-
-
-class DireccionCrearSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Direccion
-        fields = ["cliente", "calle", "numero_exterior", "colonia", "ciudad",
-                  "estado_provincia", "codigo_postal", "pais", "es_principal"]
-        extra_kwargs = {"cliente": {"required": False}}
-
-
-class AuditoriaAccesoSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = AuditoriaAcceso
-        fields = ["id", "usuario", "correo_intentado", "ip", "user_agent", "exitoso", "creado_en"]
+ADMIN_EMAIL = os.getenv('ADMIN_EMAIL')
+ADMIN_PASSWORD = os.getenv('ADMIN_PASSWORD')

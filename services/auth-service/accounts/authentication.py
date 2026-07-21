@@ -1,27 +1,49 @@
-from rest_framework import permissions
+import jwt
+from django.conf import settings
+from rest_framework.authentication import BaseAuthentication
+from rest_framework.exceptions import AuthenticationFailed
 
 
-class EsAdmin(permissions.BasePermission):
-    def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated and request.user.rol == "admin")
+class UsuarioToken:
+    is_authenticated = True
+
+    def __init__(self, id, correo, rol, cliente_id=None):
+        self.id = id
+        self.correo = correo
+        self.rol = rol
+        self.cliente_id = cliente_id
+
+    def __str__(self):
+        return self.correo
 
 
-class EsPropioUsuarioOAdmin(permissions.BasePermission):
-    """Para el recurso Usuario: el propio usuario o un admin."""
-    def has_object_permission(self, request, view, obj):
-        if request.user.rol == "admin":
-            return True
-        return obj.id == request.user.id
+class JWTRolAuthentication(BaseAuthentication):
+    """Decodifica el access token emitido en accounts/utils.py (PyJWT, firmado
+    con JWT_SECRET_KEY/JWT_ALGORITHM, claims usuario_id/correo/rol/type)."""
 
+    def authenticate(self, request):
+        auth_header = request.META.get('HTTP_AUTHORIZATION', '')
+        if not auth_header.startswith('Bearer '):
+            return None
 
-class EsPropioClienteOAdmin(permissions.BasePermission):
-    """Para Cliente y Direccion: el dueño del perfil o un admin."""
-    def has_object_permission(self, request, view, obj):
-        if request.user.rol == "admin":
-            return True
-        cliente = getattr(request.user, "cliente", None)
-        if cliente is None:
-            return False
-        if hasattr(obj, "usuario_id"):  # es un Cliente
-            return obj.id == cliente.id
-        return obj.cliente_id == cliente.id  # es una Direccion
+        token = auth_header[len('Bearer '):].strip()
+        try:
+            payload = jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
+        except jwt.ExpiredSignatureError:
+            raise AuthenticationFailed('Token expirado.')
+        except jwt.InvalidTokenError:
+            raise AuthenticationFailed('Token invalido.')
+
+        if payload.get('type') != 'access':
+            raise AuthenticationFailed('Token invalido: no es un access token.')
+
+        user_id = payload.get('usuario_id')
+        rol = payload.get('rol')
+        if user_id is None or rol is None:
+            raise AuthenticationFailed('Token invalido: faltan claims requeridos.')
+
+        usuario = UsuarioToken(
+            id=user_id, correo=payload.get('correo'), rol=rol,
+            cliente_id=payload.get('cliente_id'),
+        )
+        return (usuario, token)
