@@ -17,7 +17,7 @@ class UsuarioToken:
 
 class JWTRolAuthentication(JWTAuthentication):
     def get_user(self, validated_token):
-        user_id = validated_token.get('user_id')
+        user_id = validated_token.get('usuario_id')
         correo = validated_token.get('correo')
         rol = validated_token.get('rol')
         cliente_id = validated_token.get('cliente_id')
