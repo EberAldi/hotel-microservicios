@@ -143,9 +143,12 @@ class ClienteViewSet(viewsets.ModelViewSet):
         return ClienteSerializer
 
     def perform_create(self, serializer):
-        if Cliente.objects.filter(usuario=self.request.user).exists():
+        # self.request.user es el UsuarioToken armado desde el JWT, NO una
+        # instancia real de Usuario -- por eso se usa usuario_id (el UUID
+        # crudo) en vez de usuario= (que esperaria un objeto Usuario real).
+        if Cliente.objects.filter(usuario_id=self.request.user.id).exists():
             raise ValidationError("Este usuario ya tiene un perfil de cliente")
-        serializer.save(usuario=self.request.user)
+        serializer.save(usuario_id=self.request.user.id)
 
     def update(self, request, *args, **kwargs):
         super().update(request, *args, **kwargs)
@@ -158,10 +161,13 @@ class ClienteViewSet(viewsets.ModelViewSet):
 
 class DireccionViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
-        if self.request.user.rol == "admin":
+        usuario = self.request.user
+        if usuario.rol == "admin":
             return Direccion.objects.all()
-        cliente = getattr(self.request.user, "cliente", None)
-        return Direccion.objects.filter(cliente=cliente) if cliente else Direccion.objects.none()
+        # usuario.cliente_id viene directo del claim del JWT (armado en el
+        # login) -- no se puede navegar self.request.user.cliente porque
+        # UsuarioToken no es un objeto real de Usuario con esa relacion.
+        return Direccion.objects.filter(cliente_id=usuario.cliente_id) if usuario.cliente_id else Direccion.objects.none()
 
     def get_permissions(self):
         return [permissions.IsAuthenticated(), EsPropioClienteOAdmin()]
@@ -172,11 +178,11 @@ class DireccionViewSet(viewsets.ModelViewSet):
         return DireccionSerializer
 
     def perform_create(self, serializer):
-        if self.request.user.rol == "admin":
+        usuario = self.request.user
+        if usuario.rol == "admin":
             serializer.save()  # espera 'cliente' en el body
         else:
-            cliente = getattr(self.request.user, "cliente", None)
-            serializer.save(cliente=cliente)
+            serializer.save(cliente_id=usuario.cliente_id)
 
     def update(self, request, *args, **kwargs):
         super().update(request, *args, **kwargs)

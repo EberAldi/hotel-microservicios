@@ -1,7 +1,6 @@
 import os
 from pathlib import Path
 from dotenv import load_dotenv
-from datetime import timedelta
 
 load_dotenv()
 
@@ -44,13 +43,9 @@ REST_FRAMEWORK = {
         'common.authentication.JWTRolAuthentication',
     ),
 }
-SIMPLE_JWT = {
-    'ACCESS_TOKEN_LIFETIME': timedelta(minutes=2),
-    'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
-    'ROTATE_REFRESH_TOKENS': False,
-    'BLACKLIST_AFTER_ROTATION': False,
-    'SIGNING_KEY': os.getenv('JWT_SECRET_KEY', SECRET_KEY),
-}
+
+JWT_SECRET_KEY = os.getenv('JWT_SECRET_KEY', SECRET_KEY)
+JWT_ALGORITHM = os.getenv('JWT_ALGORITHM', 'HS256')
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 

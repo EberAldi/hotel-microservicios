@@ -3,12 +3,16 @@ import secrets
 import jwt
 from django.conf import settings
 
+from .models import Cliente
+
 
 def generar_access_token(usuario):
+    cliente = Cliente.objects.filter(usuario_id=usuario.id).first()
     payload = {
         "usuario_id": str(usuario.id),
         "correo": usuario.correo,
         "rol": usuario.rol,
+        "cliente_id": str(cliente.id) if cliente else None,
         "exp": datetime.datetime.utcnow() + settings.JWT_ACCESS_TOKEN_LIFETIME,
         "iat": datetime.datetime.utcnow(),
         "type": "access",
