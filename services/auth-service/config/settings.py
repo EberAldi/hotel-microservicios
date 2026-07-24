@@ -50,8 +50,11 @@ if os.getenv('DB_SCHEMA'):
 
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
-        'accounts.authentication.JWTRolAuthentication',
+        'accounts.authentication.JWTRolAuthentication',  # auth-service
     ),
+    'DEFAULT_RENDERER_CLASSES': [
+        'rest_framework.renderers.JSONRenderer',
+    ],
 }
 
 # Claims propios (no se usa djangorestframework-simplejwt para firmar/verificar
